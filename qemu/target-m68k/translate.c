@@ -60,7 +60,7 @@ void m68k_tcg_init(struct uc_struct *uc)
     // tcg_ctx->QREG_FP_RESULT = tcg_global_mem_new_i64(tcg_ctx, TCG_AREG0, offsetof(CPUM68KState, fp_result), "FP_RESULT");
 
     tcg_ctx->cpu_halted = tcg_global_mem_new_i32(tcg_ctx, TCG_AREG0,
-                                        -offsetof(M68kCPU, env) +
+                                        0-offsetof(M68kCPU, env) +
                                         offsetof(CPUState, halted), "HALTED");
 
     tcg_ctx->cpu_env = tcg_global_reg_new_ptr(tcg_ctx, TCG_AREG0, "env");
@@ -427,7 +427,10 @@ static inline int opsize_bytes(int opsize)
     case OS_DOUBLE: return 8;
     default:
         g_assert_not_reached();
+        return 0;
     }
+
+    return 0;
 }
 
 /* Assign value to a register.  If the width is less than the register width
@@ -661,7 +664,8 @@ static TCGv gen_ea(CPUM68KState *env, DisasContext *s, uint16_t insn,
                 offset = read_im32(env, s);
                 break;
             default:
-                g_assert_not_reached();
+                // Should not happen : for OS_SIGNLE
+                return *(TCGv *)tcg_ctx->NULL_QREG;
             }
             return tcg_const_i32(tcg_ctx, offset);
         default:
@@ -885,10 +889,7 @@ DISAS_INSN(undef_fpu)
 
 DISAS_INSN(undef)
 {
-    M68kCPU *cpu = m68k_env_get_cpu(env);
-
     gen_exception(s, s->pc - 2, EXCP_UNSUPPORTED);
-    cpu_abort(CPU(cpu), "Illegal instruction: %04x @ %08x", insn, s->pc - 2);
 }
 
 DISAS_INSN(mulw)
@@ -2148,7 +2149,8 @@ DISAS_INSN(wdebug)
         return;
     }
     /* TODO: Implement wdebug.  */
-    cpu_abort(CPU(cpu), "WDEBUG not implemented");
+    qemu_log("WDEBUG not implemented\n");
+    gen_exception(s, s->pc - 2, EXCP_UNSUPPORTED);
 }
 
 DISAS_INSN(trap)
@@ -2245,8 +2247,9 @@ DISAS_INSN(fpu)
         case 1: /* FPIAR */
         case 2: /* FPSR */
         default:
-            cpu_abort(NULL, "Unimplemented: fmove to control %d",
-                      (ext >> 10) & 7);
+            qemu_log("Unimplemented: fmove to control %d\n",
+                     (ext >> 10) & 7);
+            goto undef;
         }
         break;
     case 5: /* fmove from control register.  */
@@ -2258,8 +2261,8 @@ DISAS_INSN(fpu)
         case 1: /* FPIAR */
         case 2: /* FPSR */
         default:
-            cpu_abort(NULL, "Unimplemented: fmove from control %d",
-                      (ext >> 10) & 7);
+            qemu_log("Unimplemented: fmove from control %d\n",
+                     (ext >> 10) & 7);
             goto undef;
         }
         DEST_EA(env, insn, OS_LONG, tmp32, NULL);
@@ -3109,7 +3112,10 @@ gen_intermediate_code_internal(M68kCPU *cpu, TranslationBlock *tb,
     if (!env->uc->block_full && HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_BLOCK, pc_start)) {
         // save block address to see if we need to patch block size later
         env->uc->block_addr = pc_start;
+        env->uc->size_arg = tcg_ctx->gen_opparam_buf - tcg_ctx->gen_opparam_ptr + 1;
         gen_uc_tracecode(tcg_ctx, 0xf8f8f8f8, UC_HOOK_BLOCK_IDX, env->uc, pc_start);
+    } else {
+        env->uc->size_arg = -1;
     }
 
     gen_tb_start(tcg_ctx);

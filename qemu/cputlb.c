@@ -152,25 +152,23 @@ void tlb_reset_dirty_range(CPUTLBEntry *tlb_entry, uintptr_t start,
 void cpu_tlb_reset_dirty_all(struct uc_struct *uc,
     ram_addr_t start1, ram_addr_t length)
 {
-    CPUState *cpu;
+    CPUState *cpu = uc->cpu;
     CPUArchState *env;
 
-    CPU_FOREACH(cpu) {
-        int mmu_idx;
+    int mmu_idx;
 
-        env = cpu->env_ptr;
-        for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
-            unsigned int i;
+    env = cpu->env_ptr;
+    for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
+        unsigned int i;
 
-            for (i = 0; i < CPU_TLB_SIZE; i++) {
-                tlb_reset_dirty_range(&env->tlb_table[mmu_idx][i],
-                                      start1, length);
-            }
+        for (i = 0; i < CPU_TLB_SIZE; i++) {
+            tlb_reset_dirty_range(&env->tlb_table[mmu_idx][i],
+                                  start1, length);
+        }
 
-            for (i = 0; i < CPU_VTLB_SIZE; i++) {
-                tlb_reset_dirty_range(&env->tlb_v_table[mmu_idx][i],
-                                      start1, length);
-            }
+        for (i = 0; i < CPU_VTLB_SIZE; i++) {
+            tlb_reset_dirty_range(&env->tlb_v_table[mmu_idx][i],
+                                  start1, length);
         }
     }
 }
@@ -237,7 +235,7 @@ void tlb_set_page(CPUState *cpu, target_ulong vaddr,
         addend = 0;
     } else {
         /* TLB_MMIO for rom/romd handled below */
-        addend = (uintptr_t)memory_region_get_ram_ptr(section->mr) + xlat;
+        addend = (uintptr_t)((char*)memory_region_get_ram_ptr(section->mr) + xlat);
     }
 
     code_address = address;
@@ -253,7 +251,7 @@ void tlb_set_page(CPUState *cpu, target_ulong vaddr,
 
     /* refill the tlb */
     env->iotlb[mmu_idx][index] = iotlb - vaddr;
-    te->addend = addend - vaddr;
+    te->addend = (uintptr_t)(addend - vaddr);
     if (prot & PAGE_READ) {
         te->addr_read = address;
     } else {
@@ -271,8 +269,8 @@ void tlb_set_page(CPUState *cpu, target_ulong vaddr,
             /* Write access calls the I/O callback.  */
             te->addr_write = address | TLB_MMIO;
         } else if (memory_region_is_ram(section->mr)
-                   && cpu_physical_memory_is_clean(cpu->uc, section->mr->ram_addr
-                                                   + xlat)) {
+                   && cpu_physical_memory_is_clean(cpu->uc, (ram_addr_t)(section->mr->ram_addr
+                                                   + xlat))) {
             te->addr_write = address | TLB_NOTDIRTY;
         } else {
             te->addr_write = address;

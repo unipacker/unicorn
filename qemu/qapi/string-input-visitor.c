@@ -14,9 +14,9 @@
 #include "qapi/string-input-visitor.h"
 #include "qapi/visitor-impl.h"
 #include "qapi/qmp/qerror.h"
-#include "qemu/option.h"
 #include "qemu/queue.h"
 #include "qemu/range.h"
+#include <stdlib.h>	// strtoll
 
 
 struct StringInputVisitor
@@ -149,7 +149,7 @@ next_list(Visitor *v, GenericList **list, Error **errp)
         return NULL;
     }
 
-    if (siv->cur < r->begin || siv->cur >= r->end) {
+    if ((uint64_t)siv->cur < r->begin || (uint64_t)siv->cur >= r->end) {
         siv->cur_range = g_list_next(siv->cur_range);
         if (!siv->cur_range) {
             return NULL;
@@ -219,28 +219,6 @@ static void parse_type_int(Visitor *v, int64_t *obj, const char *name,
 error:
     error_set(errp, QERR_INVALID_PARAMETER_VALUE, name,
               "an int64 value or range");
-}
-
-static void parse_type_size(Visitor *v, uint64_t *obj, const char *name,
-                            Error **errp)
-{
-    StringInputVisitor *siv = DO_UPCAST(StringInputVisitor, visitor, v);
-    Error *err = NULL;
-    uint64_t val;
-
-    if (siv->string) {
-        parse_option_size(name, siv->string, &val, &err);
-    } else {
-        error_set(errp, QERR_INVALID_PARAMETER_TYPE, name ? name : "null",
-                  "size");
-        return;
-    }
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
-
-    *obj = val;
 }
 
 static void parse_type_bool(Visitor *v, bool *obj, const char *name,
@@ -332,7 +310,7 @@ StringInputVisitor *string_input_visitor_new(const char *str)
 
     v->visitor.type_enum = input_type_enum;
     v->visitor.type_int = parse_type_int;
-    v->visitor.type_size = parse_type_size;
+    v->visitor.type_size = NULL;
     v->visitor.type_bool = parse_type_bool;
     v->visitor.type_str = parse_type_str;
     v->visitor.type_number = parse_type_number;

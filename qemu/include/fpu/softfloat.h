@@ -42,7 +42,7 @@ these four paragraphs for those parts of this code that are retained.
 #include <sunmath.h>
 #endif
 
-#include <inttypes.h>
+#include "unicorn/platform.h"
 #include "config-host.h"
 #include "qemu/osdep.h"
 
@@ -125,7 +125,7 @@ typedef struct {
     uint16_t high;
 } floatx80;
 #define make_floatx80(exp, mant) ((floatx80) { mant, exp })
-#define make_floatx80_init(exp, mant) { .low = mant, .high = exp }
+#define make_floatx80_init(exp, mant) { mant, exp }
 typedef struct {
 #ifdef HOST_WORDS_BIGENDIAN
     uint64_t high, low;
@@ -133,8 +133,13 @@ typedef struct {
     uint64_t low, high;
 #endif
 } float128;
-#define make_float128(high_, low_) ((float128) { .high = high_, .low = low_ })
-#define make_float128_init(high_, low_) { .high = high_, .low = low_ }
+#ifdef HOST_WORDS_BIGENDIAN
+#define make_float128(high_, low_) ((float128) { high_, low_ })
+#define make_float128_init(high_, low_) { high_, low_ }
+#else
+#define make_float128(high_, low_) ((float128) { low_, high_ })
+#define make_float128_init(high_, low_) { low_, high_ }
+#endif
 
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE floating-point underflow tininess-detection mode.
@@ -623,6 +628,21 @@ static inline int floatx80_is_zero_or_denormal(floatx80 a)
 static inline int floatx80_is_any_nan(floatx80 a)
 {
     return ((a.high & 0x7fff) == 0x7fff) && (a.low<<1);
+}
+
+/*----------------------------------------------------------------------------
+| Return whether the given value is an invalid floatx80 encoding.
+| Invalid floatx80 encodings arise when the integer bit is not set, but
+| the exponent is not zero. The only times the integer bit is permitted to
+| be zero is in subnormal numbers and the value zero.
+| This includes what the Intel software developer's manual calls pseudo-NaNs,
+| pseudo-infinities and un-normal numbers. It does not include
+| pseudo-denormals, which must still be correctly handled as inputs even
+| if they are never generated as outputs.
+*----------------------------------------------------------------------------*/
+static inline bool floatx80_invalid_encoding(floatx80 a)
+{
+    return (a.low & ((uint64_t)1 << 63)) == 0 && (a.high & 0x7FFF) != 0;
 }
 
 #define floatx80_zero make_floatx80(0x0000, 0x0000000000000000LL)

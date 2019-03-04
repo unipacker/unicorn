@@ -8,8 +8,8 @@ from unicorn.arm_const import *
 
 
 # code to be emulated
-ARM_CODE   = "\x37\x00\xa0\xe3\x03\x10\x42\xe0" # mov r0, #0x37; sub r1, r2, r3
-THUMB_CODE = "\x83\xb0" # sub    sp, #0xc
+ARM_CODE   = b"\x37\x00\xa0\xe3\x03\x10\x42\xe0" # mov r0, #0x37; sub r1, r2, r3
+THUMB_CODE = b"\x83\xb0" # sub    sp, #0xc
 # memory address where emulation starts
 ADDRESS    = 0x10000
 
@@ -21,7 +21,7 @@ def hook_block(uc, address, size, user_data):
 
 # callback for tracing instructions
 def hook_code(uc, address, size, user_data):
-    print(">>> Tracing instruction at 0x%x, instruction size = %u" %(address, size))
+    print(">>> Tracing instruction at 0x%x, instruction size = 0x%x" %(address, size))
 
 
 # Test ARM
@@ -41,12 +41,13 @@ def test_arm():
         mu.reg_write(UC_ARM_REG_R0, 0x1234)
         mu.reg_write(UC_ARM_REG_R2, 0x6789)
         mu.reg_write(UC_ARM_REG_R3, 0x3333)
-
+        mu.reg_write(UC_ARM_REG_APSR, 0xFFFFFFFF) #All application flags turned on
+   
         # tracing all basic blocks with customized callback
         mu.hook_add(UC_HOOK_BLOCK, hook_block)
 
-        # tracing all instructions with customized callback
-        mu.hook_add(UC_HOOK_CODE, hook_code)
+        # tracing one instruction at ADDRESS with customized callback
+        mu.hook_add(UC_HOOK_CODE, hook_code, begin=ADDRESS, end=ADDRESS)
 
         # emulate machine code in infinite time
         mu.emu_start(ADDRESS, ADDRESS + len(ARM_CODE))
@@ -85,7 +86,8 @@ def test_thumb():
         mu.hook_add(UC_HOOK_CODE, hook_code)
 
         # emulate machine code in infinite time
-        mu.emu_start(ADDRESS, ADDRESS + len(THUMB_CODE))
+        # Note we start at ADDRESS | 1 to indicate THUMB mode.
+        mu.emu_start(ADDRESS | 1, ADDRESS + len(THUMB_CODE))
 
         # now print out some registers
         print(">>> Emulation done. Below is the CPU context")
@@ -99,5 +101,5 @@ def test_thumb():
 
 if __name__ == '__main__':
     test_arm()
-    print("=" * 20)
+    print("=" * 26)
     test_thumb()

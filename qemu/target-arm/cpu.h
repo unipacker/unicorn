@@ -1146,7 +1146,7 @@ struct ARMCPRegInfo {
 #define CPREG_FIELD64(env, ri) \
     (*(uint64_t *)((char *)(env) + (ri)->fieldoffset))
 
-#define REGINFO_SENTINEL { .type = ARM_CP_SENTINEL }
+#define REGINFO_SENTINEL { NULL, 0,0,0,0,0,0, 0, ARM_CP_SENTINEL, 0, NULL, 0,0,0,0,0,0,0,0, }
 
 void define_arm_cp_regs_with_opaque(ARMCPU *cpu,
                                     const ARMCPRegInfo *regs, void *opaque);
@@ -1285,6 +1285,7 @@ static inline bool arm_excp_unmasked(CPUState *cs, unsigned int excp_idx)
         return !(env->daif & PSTATE_I);
     default:
         g_assert_not_reached();
+        return false;
     }
 }
 

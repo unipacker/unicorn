@@ -1417,7 +1417,7 @@ void glue(helper_phaddd, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
     d->L(0) = (int32_t)d->L(0) + (int32_t)d->L(1);
     XMM_ONLY(d->L(1) = (int32_t)d->L(2) + (int32_t)d->L(3));
-    d->L((1 << SHIFT) + 0) = (int32_t)s->L(0) + (int32_t)s->L(1);
+    d->L((1 << SHIFT) + 0) = (uint32_t)((int32_t)s->L(0) + (int32_t)s->L(1));
     XMM_ONLY(d->L(3) = (int32_t)s->L(2) + (int32_t)s->L(3));
 }
 
@@ -1471,7 +1471,7 @@ void glue(helper_phsubd, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
     d->L(0) = (int32_t)d->L(0) - (int32_t)d->L(1);
     XMM_ONLY(d->L(1) = (int32_t)d->L(2) - (int32_t)d->L(3));
-    d->L((1 << SHIFT) + 0) = (int32_t)s->L(0) - (int32_t)s->L(1);
+    d->L((1 << SHIFT) + 0) = (uint32_t)((int32_t)s->L(0) - (int32_t)s->L(1));
     XMM_ONLY(d->L(3) = (int32_t)s->L(2) - (int32_t)s->L(3));
 }
 
@@ -1945,7 +1945,7 @@ static inline int pcmp_elen(CPUX86State *env, int reg, uint32_t ctrl)
 
     /* Presence of REX.W is indicated by a bit higher than 7 set */
     if (ctrl >> 8) {
-        val = abs1((int64_t)env->regs[reg]);
+        val = abs1((int)env->regs[reg]);
     } else {
         val = abs1((int32_t)env->regs[reg]);
     }

@@ -7,8 +7,11 @@ import (
 )
 
 /*
-#cgo LDFLAGS: -lunicorn
+#cgo CFLAGS: -O3 -Wall -Werror -I../../../include
+#cgo LDFLAGS: -L../../../ -lunicorn
+#cgo linux LDFLAGS: -L../../../ -lunicorn -lrt
 #include <unicorn/unicorn.h>
+#include "uc.h"
 */
 import "C"
 
@@ -41,7 +44,9 @@ type Unicorn interface {
 	MemReadInto(dst []byte, addr uint64) error
 	MemWrite(addr uint64, data []byte) error
 	RegRead(reg int) (uint64, error)
+	RegReadBatch(regs []int) ([]uint64, error)
 	RegWrite(reg int, value uint64) error
+	RegWriteBatch(regs []int, vals []uint64) error
 	RegReadMmr(reg int) (*X86Mmr, error)
 	RegWriteMmr(reg int, value *X86Mmr) error
 	Start(begin, until uint64) error
@@ -51,20 +56,30 @@ type Unicorn interface {
 	HookDel(hook Hook) error
 	Query(queryType int) (uint64, error)
 	Close() error
+
+	ContextSave(reuse Context) (Context, error)
+	ContextRestore(Context) error
+	Handle() *C.uc_engine
 }
 
 type uc struct {
 	handle *C.uc_engine
 	final  sync.Once
+	hooks  map[Hook]uintptr
 }
 
 type UcOptions struct {
 	Timeout, Count uint64
 }
 
-func NewUnicorn(arch, mode int) (Unicorn, error) {
+func Version() (int, int) {
 	var major, minor C.uint
 	C.uc_version(&major, &minor)
+	return int(major), int(minor)
+}
+
+func NewUnicorn(arch, mode int) (Unicorn, error) {
+	major, minor := Version()
 	if major != C.UC_API_MAJOR || minor != C.UC_API_MINOR {
 		return nil, UcError(ERR_VERSION)
 	}
@@ -72,7 +87,7 @@ func NewUnicorn(arch, mode int) (Unicorn, error) {
 	if ucerr := C.uc_open(C.uc_arch(arch), C.uc_mode(mode), &handle); ucerr != ERR_OK {
 		return nil, UcError(ucerr)
 	}
-	u := &uc{handle: handle}
+	u := &uc{handle: handle, hooks: make(map[Hook]uintptr)}
 	runtime.SetFinalizer(u, func(u *uc) { u.Close() })
 	return u, nil
 }
@@ -80,6 +95,10 @@ func NewUnicorn(arch, mode int) (Unicorn, error) {
 func (u *uc) Close() (err error) {
 	u.final.Do(func() {
 		if u.handle != nil {
+			for _, uptr := range u.hooks {
+				hookMap.remove(uptr)
+			}
+			u.hooks = nil
 			err = errReturn(C.uc_close(u.handle))
 			u.handle = nil
 		}
@@ -112,8 +131,40 @@ func (u *uc) RegRead(reg int) (uint64, error) {
 	return uint64(val), errReturn(ucerr)
 }
 
+func (u *uc) RegWriteBatch(regs []int, vals []uint64) error {
+	if len(regs) == 0 {
+		return nil
+	}
+	if len(vals) < len(regs) {
+		regs = regs[:len(vals)]
+	}
+	cregs := make([]C.int, len(regs))
+	for i, v := range regs {
+		cregs[i] = C.int(v)
+	}
+	cregs2 := (*C.int)(unsafe.Pointer(&cregs[0]))
+	cvals := (*C.uint64_t)(unsafe.Pointer(&vals[0]))
+	ucerr := C.uc_reg_write_batch_helper(u.handle, cregs2, cvals, C.int(len(regs)))
+	return errReturn(ucerr)
+}
+
+func (u *uc) RegReadBatch(regs []int) ([]uint64, error) {
+	if len(regs) == 0 {
+		return nil, nil
+	}
+	cregs := make([]C.int, len(regs))
+	for i, v := range regs {
+		cregs[i] = C.int(v)
+	}
+	cregs2 := (*C.int)(unsafe.Pointer(&cregs[0]))
+	vals := make([]uint64, len(regs))
+	cvals := (*C.uint64_t)(unsafe.Pointer(&vals[0]))
+	ucerr := C.uc_reg_read_batch_helper(u.handle, cregs2, cvals, C.int(len(regs)))
+	return vals, errReturn(ucerr)
+}
+
 func (u *uc) MemRegions() ([]*MemRegion, error) {
-	var regions *C.struct_uc_mem_region
+	var regions *C.uc_mem_region
 	var count C.uint32_t
 	ucerr := C.uc_mem_regions(u.handle, &regions, &count)
 	if ucerr != C.UC_ERR_OK {
@@ -128,6 +179,7 @@ func (u *uc) MemRegions() ([]*MemRegion, error) {
 			Prot:  int(v.perms),
 		}
 	}
+	C.uc_free(unsafe.Pointer(regions))
 	return ret, nil
 }
 
@@ -174,4 +226,8 @@ func (u *uc) Query(queryType int) (uint64, error) {
 	var ret C.size_t
 	ucerr := C.uc_query(u.handle, C.uc_query_type(queryType), &ret)
 	return uint64(ret), errReturn(ucerr)
+}
+
+func (u *uc) Handle() *C.uc_engine {
+	return u.handle
 }

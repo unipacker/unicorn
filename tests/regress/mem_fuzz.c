@@ -1,7 +1,5 @@
 #define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -56,8 +54,8 @@ void perform_unmap_step(uc_engine *uc){
 }
 
 void perform_write_step(uc_engine *uc){
-    char* buff[4096*4];
-    memset(buff, 0, 4096*4);
+    char buff[4096*4];
+    memset((void *)buff, 0, 4096*4);
     uint64_t addr = get_addr();
     uint64_t len = get_len()%(4096*3);
     printf("write(uc,0x%"PRIx64",0x%"PRIx64"); //%d\n", addr, len, step);
@@ -65,9 +63,9 @@ void perform_write_step(uc_engine *uc){
 }
 
 void perform_read_step(uc_engine *uc){
-    char* buff[4096*4];
+    char buff[4096*4];
     uint64_t addr = get_addr();
-    uint64_t len = get_len()%(4096*3);
+    uint64_t len = get_len()%(4096*4);
     printf("read(uc,0x%"PRIx64",0x%"PRIx64"); //%d\n", addr, len, step);
     uc_mem_read(uc, addr, buff, len);
 }
@@ -84,7 +82,6 @@ void perform_fuzz_step(uc_engine *uc){
 int main(int argc, char **argv, char **envp)
 {
     uc_engine *uc;
-    uc_hook trace1, trace2;
     uc_err err;
     if(argc<2){
       printf("usage: mem_fuzz $seed\n");

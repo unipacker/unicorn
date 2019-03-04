@@ -70,7 +70,6 @@ static void apic_sync_vapic(APICCommonState *s, int sync_type)
         //length = offsetof(VAPICState, enabled) - offsetof(VAPICState, isr);
 
         if (sync_type & SYNC_TO_VAPIC) {
-            assert(qemu_cpu_is_self(CPU(s->cpu)));
 
             vapic_state.tpr = s->tpr;
             vapic_state.enabled = 1;
@@ -179,11 +178,13 @@ static void apic_pre_save(APICCommonState *s)
 
 static void apic_post_load(APICCommonState *s)
 {
+#if 0
     if (s->timer_expiry != -1) {
         timer_mod(s->timer, s->timer_expiry);
     } else {
         timer_del(s->timer);
     }
+#endif
 }
 
 static int apic_realize(struct uc_struct *uc, DeviceState *dev, Error **errp)
@@ -202,18 +203,28 @@ static void apic_class_init(struct uc_struct *uc, ObjectClass *klass, void *data
     k->vapic_base_update = apic_vapic_base_update;
     k->pre_save = apic_pre_save;
     k->post_load = apic_post_load;
-	//printf("... init apic class\n");
+    //printf("... init apic class\n");
 }
 
 static const TypeInfo apic_info = {
-    .name          = "apic",
-    .instance_size = sizeof(APICCommonState),
-    .parent        = TYPE_APIC_COMMON,
-    .class_init    = apic_class_init,
+    "apic",
+    TYPE_APIC_COMMON,
+
+    0,
+    sizeof(APICCommonState),
+    NULL,
+
+    NULL,
+    NULL,
+    NULL,
+
+    NULL,
+
+    apic_class_init,
 };
 
 void apic_register_types(struct uc_struct *uc)
 {
-	//printf("... register apic types\n");
+    //printf("... register apic types\n");
     type_register_static(uc, &apic_info);
 }

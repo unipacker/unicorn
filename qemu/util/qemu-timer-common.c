@@ -27,10 +27,9 @@
 /* real time host monotonic timer */
 
 #ifdef _WIN32
-
 int64_t clock_freq;
 
-static void __attribute__((constructor)) init_get_clock(void)
+INITIALIZER(init_get_clock)
 {
     LARGE_INTEGER freq;
     int ret;
@@ -40,22 +39,5 @@ static void __attribute__((constructor)) init_get_clock(void)
         exit(1);
     }
     clock_freq = freq.QuadPart;
-}
-
-#else
-
-int use_rt_clock;
-
-static void __attribute__((constructor)) init_get_clock(void)
-{
-    use_rt_clock = 0;
-#ifdef CLOCK_MONOTONIC
-    {
-        struct timespec ts;
-        if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-            use_rt_clock = 1;
-        }
-    }
-#endif
 }
 #endif

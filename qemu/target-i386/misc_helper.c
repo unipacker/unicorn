@@ -126,17 +126,17 @@ void helper_write_crN(CPUX86State *env, int reg, target_ulong t0)
     cpu_svm_check_intercept_param(env, SVM_EXIT_WRITE_CR0 + reg, 0);
     switch (reg) {
     case 0:
-        cpu_x86_update_cr0(env, t0);
+        cpu_x86_update_cr0(env, (uint32_t)t0);
         break;
     case 3:
         cpu_x86_update_cr3(env, t0);
         break;
     case 4:
-        cpu_x86_update_cr4(env, t0);
+        cpu_x86_update_cr4(env, (uint32_t)t0);
         break;
     case 8:
         if (!(env->hflags2 & HF2_VINTR_MASK)) {
-            cpu_set_apic_tpr(env->uc, x86_env_get_cpu(env)->apic_state, t0);
+            cpu_set_apic_tpr(env->uc, x86_env_get_cpu(env)->apic_state, (uint8_t)t0);
         }
         env->v_tpr = t0 & 0x0f;
         break;
@@ -566,7 +566,6 @@ void helper_monitor(CPUX86State *env, target_ulong ptr)
 
 void helper_mwait(CPUX86State *env, int next_eip_addend)
 {
-    CPUState *cs;
     X86CPU *cpu;
 
     if ((uint32_t)env->regs[R_ECX] != 0) {
@@ -576,13 +575,8 @@ void helper_mwait(CPUX86State *env, int next_eip_addend)
     env->eip += next_eip_addend;
 
     cpu = x86_env_get_cpu(env);
-    cs = CPU(cpu);
     /* XXX: not complete but not completely erroneous */
-    if (cs->cpu_index != 0 || CPU_NEXT(cs) != NULL) {
-        do_pause(cpu);
-    } else {
-        do_hlt(cpu);
-    }
+    do_hlt(cpu);
 }
 
 void helper_pause(CPUX86State *env, int next_eip_addend)

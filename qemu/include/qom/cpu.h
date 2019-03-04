@@ -26,7 +26,6 @@
 #include "exec/hwaddr.h"
 #include "qemu/queue.h"
 #include "qemu/thread.h"
-#include "qemu/tls.h"
 #include "qemu/typedefs.h"
 
 typedef int (*WriteCoreDumpFunction)(const void *buf, size_t size,
@@ -69,9 +68,6 @@ typedef void (*CPUUnassignedAccess)(CPUState *cpu, hwaddr addr,
                                     unsigned size);
 
 struct TranslationBlock;
-
-//DECLARE_TLS(CPUState *, current_cpu);
-//#define current_cpu tls_var(current_cpu)
 
 /**
  * CPUClass:
@@ -222,7 +218,6 @@ struct CPUState {
     int thread_id;
     uint32_t host_tid;
     bool running;
-    struct QemuCond *halt_cond;
     struct qemu_work_item *queued_work_first, *queued_work_last;
     bool thread_kicked;
     bool created;
@@ -437,16 +432,6 @@ static inline bool cpu_has_work(CPUState *cpu)
 }
 
 /**
- * qemu_cpu_is_self:
- * @cpu: The vCPU to check against.
- *
- * Checks whether the caller is executing on the vCPU thread.
- *
- * Returns: %true if called from @cpu's thread, %false otherwise.
- */
-bool qemu_cpu_is_self(CPUState *cpu);
-
-/**
  * qemu_cpu_kick:
  * @cpu: The vCPU to kick.
  *
@@ -547,7 +532,7 @@ static inline void cpu_unaligned_access(CPUState *cpu, vaddr addr,
 {
     CPUClass *cc = CPU_GET_CLASS(cpu->uc, cpu);
 
-    return cc->do_unaligned_access(cpu, addr, is_write, is_user, retaddr);
+    cc->do_unaligned_access(cpu, addr, is_write, is_user, retaddr);
 }
 #endif
 

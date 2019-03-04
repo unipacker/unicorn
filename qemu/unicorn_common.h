@@ -19,29 +19,24 @@ static inline bool cpu_physical_mem_write(AddressSpace *as, hwaddr addr,
     return !cpu_physical_memory_rw(as, addr, (void *)buf, len, 1);
 }
 
-static void free_table(gpointer key, gpointer value, gpointer data)
-{
-    TypeInfo *ti = (TypeInfo*) value;
-    g_free((void*) ti->class);
-    g_free((void*) ti->name);
-    g_free((void*) ti->parent);
-    g_free((void*) ti);
-}
-
 void tb_cleanup(struct uc_struct *uc);
+void free_code_gen_buffer(struct uc_struct *uc);
 
 /** Freeing common resources */
 static void release_common(void *t)
 {
+    TCGPool *po, *to;
     TCGContext *s = (TCGContext *)t;
-    struct uc_struct* uc = s->uc;
+#if TCG_TARGET_REG_BITS == 32
+    int i;
+#endif
 
     // Clean TCG.
     TCGOpDef* def = &s->tcg_op_defs[0];
     g_free(def->args_ct);
     g_free(def->sorted_args);
     g_free(s->tcg_op_defs);
-    TCGPool *po, *to;
+
     for (po = s->pool_first; po; po = to) {
         to = po->next;
         g_free(po);
@@ -49,17 +44,25 @@ static void release_common(void *t)
     tcg_pool_reset(s);
     g_hash_table_destroy(s->helpers);
 
-    // Clean memory.
-    phys_mem_clean(uc);
-    address_space_destroy(&(uc->as));
-    memory_free(uc);
+    // TODO(danghvu): these function is not available outside qemu
+    // so we keep them here instead of outside uc_close.
+    phys_mem_clean(s->uc);
+    address_space_destroy(&(s->uc->as));
+    memory_free(s->uc);
+    tb_cleanup(s->uc);
+    free_code_gen_buffer(s->uc);
 
-    // Clean CPU.
-    object_unref(uc, uc->cpu);
-    g_hash_table_foreach(uc->type_table, free_table, uc);
-
-    // Clean cache.
-    tb_cleanup(uc);
+#if TCG_TARGET_REG_BITS == 32
+    for(i = 0; i < s->nb_globals; i++) {
+        TCGTemp *ts = &s->temps[i];
+        if (ts->base_type == TCG_TYPE_I64) {
+            if (ts->name && ((strcmp(ts->name+(strlen(ts->name)-2), "_0") == 0) ||
+                        (strcmp(ts->name+(strlen(ts->name)-2), "_1") == 0))) {
+                free((void *)ts->name);
+            }
+        }
+    }
+#endif
 }
 
 static inline void uc_common_init(struct uc_struct* uc)
@@ -70,7 +73,6 @@ static inline void uc_common_init(struct uc_struct* uc)
     uc->tcg_enabled = tcg_enabled;
     uc->tcg_exec_init = tcg_exec_init;
     uc->cpu_exec_init_all = cpu_exec_init_all;
-    uc->pause_all_vcpus = pause_all_vcpus;
     uc->vm_start = vm_start;
     uc->memory_map = memory_map;
     uc->memory_map_ptr = memory_map_ptr;

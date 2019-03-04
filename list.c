@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include <stdint.h>
+#include "unicorn/platform.h"
 #include "list.h"
 
 // simple linked list implementation
@@ -22,6 +22,28 @@ void list_clear(struct list *list)
     list->tail = NULL;
 }
 
+// insert a new item at the begin of the list.
+// returns generated linked list node, or NULL on failure
+void *list_insert(struct list *list, void *data)
+{
+    struct list_item *item = malloc(sizeof(struct list_item));
+    if (item == NULL) {
+        return NULL;
+    }
+
+    item->data = data;
+    item->next = list->head;
+
+    if (list->tail == NULL) {
+        list->tail = item;
+    }
+
+    list->head = item;
+
+    return item;
+}
+
+// append a new item at the end of the list.
 // returns generated linked list node, or NULL on failure
 void *list_append(struct list *list, void *data)
 {
@@ -54,6 +76,8 @@ bool list_remove(struct list *list, void *data)
         if (cur->data == data) {
             if (cur == list->head) {
                 list->head = next;
+            } else {
+                prev->next = next;
             }
             if (cur == list->tail) {
                 list->tail = prev;

@@ -26,8 +26,8 @@
 #ifndef QEMU_OS_WIN32_H
 #define QEMU_OS_WIN32_H
 
-#include <windows.h>
 #include <winsock2.h>
+#include <windows.h>
 #include <setjmp.h>
 
 /* Workaround for older versions of MinGW. */
@@ -56,7 +56,7 @@
 # define EWOULDBLOCK  WSAEWOULDBLOCK
 #endif
 
-#if defined(_WIN64)
+#if defined(_WIN64) && !defined(_MSC_VER)
 /* On w64, setjmp is implemented by _setjmp which needs a second parameter.
  * If this parameter is NULL, longjump does no stack unwinding.
  * That is what we need for QEMU. Passing the value of register rsp (default)
@@ -73,45 +73,10 @@
 #define sigsetjmp(env, savemask) setjmp(env)
 #define siglongjmp(env, val) longjmp(env, val)
 
-/* Declaration of ffs() is missing in MinGW's strings.h. */
-int ffs(int i);
-
-/* Missing POSIX functions. Don't use MinGW-w64 macros. */
-#undef gmtime_r
-struct tm *gmtime_r(const time_t *timep, struct tm *result);
-#undef localtime_r
-struct tm *localtime_r(const time_t *timep, struct tm *result);
-
-// char *strtok_r(char *str, const char *delim, char **saveptr);
-
-static inline void os_setup_signal_handling(void) {}
-static inline void os_daemonize(void) {}
-static inline void os_setup_post(void) {}
-void os_set_line_buffering(void);
-static inline void os_set_proc_name(const char *dummy) {}
-
 size_t getpagesize(void);
 
 #if !defined(EPROTONOSUPPORT)
 # define EPROTONOSUPPORT EINVAL
 #endif
-
-int setenv(const char *name, const char *value, int overwrite);
-
-typedef struct {
-    long tv_sec;
-    long tv_usec;
-} qemu_timeval;
-int qemu_gettimeofday(qemu_timeval *tp);
-
-static inline bool is_daemonized(void)
-{
-    return false;
-}
-
-static inline int os_mlock(void)
-{
-    return -ENOSYS;
-}
 
 #endif

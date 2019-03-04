@@ -1,5 +1,8 @@
 /* Unicorn Emulator Engine */
-/* By Nguyen Anh Quynh <aquynh@gmail.com>, 2015 */
+/* By Nguyen Anh Quynh <aquynh@gmail.com>, 2015-2017 */
+/* This file is released under LGPL2.
+   See COPYING.LGPL2 in root directory for more details
+*/
 
 #ifndef UNICORN_ENGINE_H
 #define UNICORN_ENGINE_H
@@ -8,16 +11,15 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
+#include "platform.h"
 #include <stdarg.h>
+
 #if defined(UNICORN_HAS_OSXKERNEL)
 #include <libkern/libkern.h>
 #else
 #include <stdlib.h>
 #include <stdio.h>
 #endif
-
-#include "platform.h"
 
 struct uc_struct;
 typedef struct uc_struct uc_engine;
@@ -30,6 +32,12 @@ typedef size_t uc_hook;
 #include "arm64.h"
 #include "mips.h"
 #include "sparc.h"
+
+#ifdef __GNUC__
+#define DEFAULT_VISIBILITY __attribute__((visibility("default")))
+#else
+#define DEFAULT_VISIBILITY
+#endif
 
 #ifdef _MSC_VER
 #pragma warning(disable:4201)
@@ -59,6 +67,12 @@ typedef size_t uc_hook;
 // Unicorn API version
 #define UC_API_MAJOR 1
 #define UC_API_MINOR 0
+
+// Unicorn package version
+#define UC_VERSION_MAJOR UC_API_MAJOR
+#define UC_VERSION_MINOR UC_API_MINOR
+#define UC_VERSION_EXTRA 2
+
 
 /*
   Macro to create combined version which can be compared to
@@ -139,6 +153,7 @@ typedef enum uc_err {
     UC_ERR_HOOK_EXIST,  // hook for this event already existed
     UC_ERR_RESOURCE,    // Insufficient resource: uc_emu_start()
     UC_ERR_OPT_INVALID, // Invalid option type: uc_option()
+    UC_ERR_EXCEPTION // Unhandled CPU exception
 } uc_err;
 
 // Runtime option for the Unicorn engine
@@ -193,42 +208,61 @@ typedef enum uc_mem_type {
     UC_MEM_WRITE_PROT,  // Write to write protected, but mapped, memory
     UC_MEM_READ_PROT,   // Read from read protected, but mapped, memory
     UC_MEM_FETCH_PROT,  // Fetch from non-executable, but mapped, memory
+    UC_MEM_READ_AFTER,   // Memory is read from (successful access)
 } uc_mem_type;
 
 // All type of hooks for uc_hook_add() API.
 typedef enum uc_hook_type {
-    UC_HOOK_INTR = 1 << 0,   // Hook all interrupt/syscall events
-    UC_HOOK_INSN = 1 << 1,   // Hook a particular instruction
-    UC_HOOK_CODE = 1 << 2,   // Hook a range of code
-    UC_HOOK_BLOCK = 1 << 3,  // Hook basic blocks
-    UC_HOOK_MEM_READ_UNMAPPED = 1 << 4,   // Hook for memory read on unmapped memory
-    UC_HOOK_MEM_WRITE_UNMAPPED = 1 << 5,  // Hook for invalid memory write events
-    UC_HOOK_MEM_FETCH_UNMAPPED = 1 << 6,  // Hook for invalid memory fetch for execution events
-    UC_HOOK_MEM_READ_PROT = 1 << 7,   // Hook for memory read on read-protected memory
-    UC_HOOK_MEM_WRITE_PROT = 1 << 8,  // Hook for memory write on write-protected memory
-    UC_HOOK_MEM_FETCH_PROT = 1 << 9,  // Hook for memory fetch on non-executable memory
-    UC_HOOK_MEM_READ = 1 << 10,   // Hook memory read events.
-    UC_HOOK_MEM_WRITE = 1 << 11,  // Hook memory write events.
-    UC_HOOK_MEM_FETCH = 1 << 12,  // Hook memory fetch for execution events
+    // Hook all interrupt/syscall events
+    UC_HOOK_INTR = 1 << 0,
+    // Hook a particular instruction - only a very small subset of instructions supported here
+    UC_HOOK_INSN = 1 << 1,
+    // Hook a range of code
+    UC_HOOK_CODE = 1 << 2,
+    // Hook basic blocks
+    UC_HOOK_BLOCK = 1 << 3,
+    // Hook for memory read on unmapped memory
+    UC_HOOK_MEM_READ_UNMAPPED = 1 << 4,
+    // Hook for invalid memory write events
+    UC_HOOK_MEM_WRITE_UNMAPPED = 1 << 5,
+    // Hook for invalid memory fetch for execution events
+    UC_HOOK_MEM_FETCH_UNMAPPED = 1 << 6,
+    // Hook for memory read on read-protected memory
+    UC_HOOK_MEM_READ_PROT = 1 << 7,
+    // Hook for memory write on write-protected memory
+    UC_HOOK_MEM_WRITE_PROT = 1 << 8,
+    // Hook for memory fetch on non-executable memory
+    UC_HOOK_MEM_FETCH_PROT = 1 << 9,
+    // Hook memory read events.
+    UC_HOOK_MEM_READ = 1 << 10,
+    // Hook memory write events.
+    UC_HOOK_MEM_WRITE = 1 << 11,
+    // Hook memory fetch for execution events
+    UC_HOOK_MEM_FETCH = 1 << 12,
+    // Hook memory read events, but only successful access.
+    // The callback will be triggered after successful read.
+    UC_HOOK_MEM_READ_AFTER = 1 << 13,
 } uc_hook_type;
 
-// hook type for all events of unmapped memory access
+// Hook type for all events of unmapped memory access
 #define UC_HOOK_MEM_UNMAPPED (UC_HOOK_MEM_READ_UNMAPPED + UC_HOOK_MEM_WRITE_UNMAPPED + UC_HOOK_MEM_FETCH_UNMAPPED)
-// hook type for all events of illegal protected memory access
+// Hook type for all events of illegal protected memory access
 #define UC_HOOK_MEM_PROT (UC_HOOK_MEM_READ_PROT + UC_HOOK_MEM_WRITE_PROT + UC_HOOK_MEM_FETCH_PROT)
-// hook type for all events of illegal read memory access
+// Hook type for all events of illegal read memory access
 #define UC_HOOK_MEM_READ_INVALID (UC_HOOK_MEM_READ_PROT + UC_HOOK_MEM_READ_UNMAPPED)
-// hook type for all events of illegal write memory access
+// Hook type for all events of illegal write memory access
 #define UC_HOOK_MEM_WRITE_INVALID (UC_HOOK_MEM_WRITE_PROT + UC_HOOK_MEM_WRITE_UNMAPPED)
-// hook type for all events of illegal fetch memory access
+// Hook type for all events of illegal fetch memory access
 #define UC_HOOK_MEM_FETCH_INVALID (UC_HOOK_MEM_FETCH_PROT + UC_HOOK_MEM_FETCH_UNMAPPED)
-// hook type for all events of illegal memory access
+// Hook type for all events of illegal memory access
 #define UC_HOOK_MEM_INVALID (UC_HOOK_MEM_UNMAPPED + UC_HOOK_MEM_PROT)
-// hook type for all events of valid memory access
+// Hook type for all events of valid memory access
+// NOTE: UC_HOOK_MEM_READ is triggered before UC_HOOK_MEM_READ_PROT and UC_HOOK_MEM_READ_UNMAPPED, so
+//       this hook may technically trigger on some invalid reads.
 #define UC_HOOK_MEM_VALID (UC_HOOK_MEM_READ + UC_HOOK_MEM_WRITE + UC_HOOK_MEM_FETCH)
 
 /*
-  Callback function for hooking memory (UC_MEM_READ, UC_MEM_WRITE & UC_MEM_FETCH)
+  Callback function for hooking memory (READ, WRITE & FETCH)
 
   @type: this memory is being READ, or WRITE
   @address: address where the code is being executed
@@ -240,8 +274,8 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
         uint64_t address, int size, int64_t value, void *user_data);
 
 /*
-  Callback function for handling invalid memory access events (UC_MEM_*_UNMAPPED and
-    UC_MEM_*PROT events)
+  Callback function for handling invalid memory access events (UNMAPPED and
+    PROT events)
 
   @type: this memory is being READ, or WRITE
   @address: address where the code is being executed
@@ -250,6 +284,17 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
   @user_data: user data passed to tracing APIs
 
   @return: return true to continue, or false to stop program (due to invalid memory).
+           NOTE: returning true to continue execution will only work if if the accessed
+           memory is made accessible with the correct permissions during the hook.
+
+           In the event of a UC_MEM_READ_UNMAPPED or UC_MEM_WRITE_UNMAPPED callback,
+           the memory should be uc_mem_map()-ed with the correct permissions, and the
+           instruction will then read or write to the address as it was supposed to.
+
+           In the event of a UC_MEM_FETCH_UNMAPPED callback, the memory can be mapped
+           in as executable, in which case execution will resume from the fetched address.
+           The instruction pointer may be written to in order to change where execution resumes,
+           but the fetch must succeed if execution is to resume.
 */
 typedef bool (*uc_cb_eventmem_t)(uc_engine *uc, uc_mem_type type,
         uint64_t address, int size, int64_t value, void *user_data);
@@ -269,7 +314,12 @@ typedef enum uc_query_type {
     // Dynamically query current hardware mode.
     UC_QUERY_MODE = 1,
     UC_QUERY_PAGE_SIZE,
+    UC_QUERY_ARCH,
 } uc_query_type;
+
+// Opaque storage for CPU context, used with uc_context_*()
+struct uc_context;
+typedef struct uc_context uc_context;
 
 /*
  Return combined API version & major and minor version numbers.
@@ -317,11 +367,12 @@ UNICORN_EXPORT
 uc_err uc_open(uc_arch arch, uc_mode mode, uc_engine **uc);
 
 /*
- Close UC instance: MUST do to release the handle when it is not used anymore.
- NOTE: this must be called only when there is no longer usage of Unicorn.
- The reason is the this API releases some cached memory, thus access to any
- Unicorn API after uc_close() might crash your application.
- After this, @uc is invalid, and nolonger usable.
+ Close a Unicorn engine instance.
+ NOTE: this must be called only when there is no longer any
+ usage of @uc. This API releases some of @uc's cached memory, thus
+ any use of the Unicorn API with @uc after it has been closed may
+ crash your application. After this, @uc is invalid, and is no
+ longer usable.
 
  @uc: pointer to a handle returned by uc_open()
 
@@ -393,6 +444,34 @@ UNICORN_EXPORT
 uc_err uc_reg_read(uc_engine *uc, int regid, void *value);
 
 /*
+ Write multiple register values.
+
+ @uc: handle returned by uc_open()
+ @rges:  array of register IDs to store
+ @value: pointer to array of register values
+ @count: length of both *regs and *vals
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals, int count);
+
+/*
+ Read multiple register values.
+
+ @uc: handle returned by uc_open()
+ @rges:  array of register IDs to retrieve
+ @value: pointer to array of values to hold registers
+ @count: length of both *regs and *vals
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count);
+
+/*
  Write to a range of bytes in memory.
 
  @uc: handle returned by uc_open()
@@ -444,7 +523,6 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until, uint64_t time
 /*
  Stop emulation (which was started by uc_emu_start() API.
  This is typically called from callback functions registered via tracing APIs.
- NOTE: for now, this will stop the execution only after the current block.
 
  @uc: handle returned by uc_open()
 
@@ -585,7 +663,7 @@ uc_err uc_mem_protect(uc_engine *uc, uint64_t address, size_t size, uint32_t per
 
  @uc: handle returned by uc_open()
  @regions: pointer to an array of uc_mem_region struct. This is allocated by
-   Unicorn, and must be freed by user later
+   Unicorn, and must be freed by user later with uc_free()
  @count: pointer to number of struct uc_mem_region contained in @regions
 
  @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
@@ -593,6 +671,63 @@ uc_err uc_mem_protect(uc_engine *uc, uint64_t address, size_t size, uint32_t per
 */
 UNICORN_EXPORT
 uc_err uc_mem_regions(uc_engine *uc, uc_mem_region **regions, uint32_t *count);
+
+/*
+ Allocate a region that can be used with uc_context_{save,restore} to perform
+ quick save/rollback of the CPU context, which includes registers and some
+ internal metadata. Contexts may not be shared across engine instances with
+ differing arches or modes.
+
+ @uc: handle returned by uc_open()
+ @context: pointer to a uc_engine*. This will be updated with the pointer to
+   the new context on successful return of this function.
+   Later, this allocated memory must be freed with uc_free().
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_context_alloc(uc_engine *uc, uc_context **context);
+
+/*
+ Free the memory allocated by uc_context_alloc & uc_mem_regions.
+
+ @mem: memory allocated by uc_context_alloc (returned in *context), or
+       by uc_mem_regions (returned in *regions)
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_free(void *mem);
+
+/*
+ Save a copy of the internal CPU context.
+ This API should be used to efficiently make or update a saved copy of the
+ internal CPU state.
+
+ @uc: handle returned by uc_open()
+ @context: handle returned by uc_context_alloc()
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_context_save(uc_engine *uc, uc_context *context);
+
+/*
+ Restore the current CPU context from a saved copy.
+ This API should be used to roll the CPU context back to a previous
+ state saved by uc_context_save().
+
+ @uc: handle returned by uc_open()
+ @buffer: handle returned by uc_context_alloc that has been used with uc_context_save
+
+ @return UC_ERR_OK on success, or other value on failure (refer to uc_err enum
+   for detailed error).
+*/
+UNICORN_EXPORT
+uc_err uc_context_restore(uc_engine *uc, uc_context *context);
 
 /*
  Set option for Unicorn engine at runtime

@@ -22,8 +22,6 @@ Test for uc_emu_stop() in code hook not always stopping the emu at the current i
 
 // posix specific
 #else // _MSC_VER
-#include <unistd.h>
-#include <inttypes.h>
 #include <unicorn/unicorn.h>
 #include "pthread.h"
 #endif // _MSC_VER
@@ -47,10 +45,10 @@ bool test_passed_ok = false;
 // This hook is used to show that code is executing in the emulator.
 static void mips_codehook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
-    printf("Executing: %llX\n", address);
+    printf("Executing: %"PRIx64"\n", address);
     if( address == 0x100008 )
     {
-        printf("Stopping at: %llX\n", address);
+        printf("Stopping at: %"PRIx64"\n", address);
         uc_emu_stop(uc);
     }
 }
@@ -60,7 +58,6 @@ int main(int argc, char **argv, char **envp)
 {
     uc_engine *uc;
     uc_err err;
-    int ret;
     uc_hook hhc;
     uint32_t val;
 
@@ -98,7 +95,7 @@ int main(int argc, char **argv, char **envp)
 
     // hook all instructions by having @begin > @end
     printf("uc_hook_add()\n");
-    uc_hook_add(uc, &hhc, UC_HOOK_CODE, mips_codehook, NULL, (uint64_t)1, (uint64_t)0);
+    uc_hook_add(uc, &hhc, UC_HOOK_CODE, mips_codehook, NULL, 1, 0);
     if( err )
     {
         printf("Failed on uc_hook_add(code) with error returned: %u\n", err);

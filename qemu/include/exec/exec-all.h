@@ -169,8 +169,6 @@ struct TranslationBlock {
     uint32_t icount;
 };
 
-#include "exec/spinlock.h"
-
 typedef struct TBContext TBContext;
 
 struct TBContext {
@@ -178,8 +176,6 @@ struct TBContext {
     TranslationBlock *tbs;
     TranslationBlock *tb_phys_hash[CODE_GEN_PHYS_HASH_SIZE];
     int nb_tbs;
-    /* any access to the tbs or the page table must use this lock */
-    spinlock_t tb_lock;
 
     /* statistics */
     int tb_flush_count;
@@ -200,7 +196,7 @@ static inline unsigned int tb_jmp_cache_hash_func(target_ulong pc)
     target_ulong tmp;
     tmp = pc ^ (pc >> (TARGET_PAGE_BITS - TB_JMP_PAGE_BITS));
     return (((tmp >> (TARGET_PAGE_BITS - TB_JMP_PAGE_BITS)) & TB_JMP_PAGE_MASK)
-	    | (tmp & TB_JMP_ADDR_MASK));
+        | (tmp & TB_JMP_ADDR_MASK));
 }
 
 static inline unsigned int tb_phys_hash_func(tb_page_addr_t pc)
@@ -277,7 +273,7 @@ static inline void tb_set_jmp_target(TranslationBlock *tb,
                                      int n, uintptr_t addr)
 {
     uint16_t offset = tb->tb_jmp_offset[n];
-    tb_set_jmp_target1((uintptr_t)(tb->tc_ptr + offset), addr);
+    tb_set_jmp_target1((uintptr_t)((char*)tb->tc_ptr + offset), addr);
 }
 
 #else
@@ -310,6 +306,9 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
 #if defined(CONFIG_TCG_INTERPRETER)
 extern uintptr_t tci_tb_ptr;
 # define GETRA() tci_tb_ptr
+#elif defined(_MSC_VER)
+#include <intrin.h>
+# define GETRA() (uintptr_t)_ReturnAddress()
 #else
 # define GETRA() \
     ((uintptr_t)__builtin_extract_return_addr(__builtin_return_address(0)))

@@ -18,9 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 */
 
-#include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <unicorn/unicorn.h>
 
@@ -46,7 +44,7 @@ bottom:
 */
 
 // callback for tracing instruction
-static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
+/*static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
     uint32_t esp;
     printf(">>> Tracing instruction at 0x%"PRIx64 ", instruction size = 0x%x\n", address, size);
@@ -55,6 +53,7 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
     printf(">>> --- ESP is 0x%x\n", esp);
 
 }
+*/
 
 // callback for tracing memory access (READ or WRITE)
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
@@ -95,11 +94,10 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
 int main(int argc, char **argv, char **envp)
 {
     uc_engine *uc;
-    uc_hook trace1, trace2;
+    uc_hook trace1;
     uc_err err;
     uint8_t bytes[8];
     uint32_t esp;
-    int result;
     int map_stack = 0;
 
     if (argc == 2 && strcmp(argv[1], "--map-stack") == 0) {
@@ -139,10 +137,10 @@ int main(int argc, char **argv, char **envp)
         printf("Allowed to write to read only memory via uc_mem_write\n");
     }
 
-    //uc_hook_add(uc, &trace2, UC_HOOK_CODE, hook_code, NULL, (uint64_t)0x400000, (uint64_t)0x400fff);
+    //uc_hook_add(uc, &trace2, UC_HOOK_CODE, hook_code, NULL, 0x400000, 0x400fff);
 
     // intercept invalid memory events
-    uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_WRITE_PROT, hook_mem_invalid, NULL);
+    uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_WRITE_PROT, hook_mem_invalid, NULL, 1, 0);
 
     // emulate machine code in infinite time
     printf("BEGIN execution - 1\n");

@@ -15,7 +15,6 @@
 #include "qapi/visitor.h"
 #include "qapi-visit.h"
 #include "qapi/string-input-visitor.h"
-#include "qapi/string-output-visitor.h"
 #include "qapi/qmp/qerror.h"
 
 /* TODO: replace QObject with a simpler visitor to avoid a dependency
@@ -218,7 +217,7 @@ static void type_initialize_interface(struct uc_struct *uc, TypeImpl *ti, TypeIm
                                       TypeImpl *parent_type)
 {
     InterfaceClass *new_iface;
-    TypeInfo info = { };
+    TypeInfo info = { 0 };
     TypeImpl *iface_impl;
 
     info.parent = parent_type->name;
@@ -253,9 +252,9 @@ static void type_initialize(struct uc_struct *uc, TypeImpl *ti)
 
     parent = type_get_parent(uc, ti);
     if (parent) {
-        type_initialize(uc, parent);
         GSList *e;
         int i;
+        type_initialize(uc, parent);
 
         g_assert(parent->class_size <= ti->class_size);
         memcpy(ti->class, parent->class, parent->class_size);
@@ -371,7 +370,7 @@ static void object_property_del_all(struct uc_struct *uc, Object *obj)
     }
 }
 
-static void object_property_del_child(struct uc_struct *uc, Object *obj, Object *child, Error **errp)
+void object_property_del_child(struct uc_struct *uc, Object *obj, Object *child, Error **errp)
 {
     ObjectProperty *prop;
 
@@ -953,48 +952,6 @@ int64_t object_property_get_int(struct uc_struct *uc, Object *obj, const char *n
     return retval;
 }
 
-int object_property_get_enum(struct uc_struct *uc, Object *obj, const char *name,
-                             const char *strings[], Error **errp)
-{
-    StringOutputVisitor *sov;
-    StringInputVisitor *siv;
-    char *str;
-    int ret;
-
-    sov = string_output_visitor_new(false);
-    object_property_get(uc, obj, string_output_get_visitor(sov), name, errp);
-    str = string_output_get_string(sov);
-    siv = string_input_visitor_new(str);
-    string_output_visitor_cleanup(sov);
-    visit_type_enum(string_input_get_visitor(siv),
-                    &ret, strings, NULL, name, errp);
-
-    g_free(str);
-    string_input_visitor_cleanup(siv);
-
-    return ret;
-}
-
-void object_property_get_uint16List(struct uc_struct *uc, Object *obj, const char *name,
-                                    uint16List **list, Error **errp)
-{
-    StringOutputVisitor *ov;
-    StringInputVisitor *iv;
-    char *str;
-
-    ov = string_output_visitor_new(false);
-    object_property_get(uc, obj, string_output_get_visitor(ov),
-                        name, errp);
-    str = string_output_get_string(ov);
-    iv = string_input_visitor_new(str);
-    visit_type_uint16List(string_input_get_visitor(iv),
-                          list, NULL, errp);
-
-    g_free(str);
-    string_output_visitor_cleanup(ov);
-    string_input_visitor_cleanup(iv);
-}
-
 void object_property_parse(struct uc_struct *uc, Object *obj, const char *string,
                            const char *name, Error **errp)
 {
@@ -1003,27 +960,6 @@ void object_property_parse(struct uc_struct *uc, Object *obj, const char *string
     object_property_set(uc, obj, string_input_get_visitor(mi), name, errp);
 
     string_input_visitor_cleanup(mi);
-}
-
-char *object_property_print(struct uc_struct *uc, Object *obj, const char *name, bool human,
-                            Error **errp)
-{
-    StringOutputVisitor *mo;
-    char *string = NULL;
-    Error *local_err = NULL;
-
-    mo = string_output_visitor_new(human);
-    object_property_get(uc, obj, string_output_get_visitor(mo), name, &local_err);
-    if (local_err) {
-        error_propagate(errp, local_err);
-        goto out;
-    }
-
-    string = string_output_get_string(mo);
-
-out:
-    string_output_visitor_cleanup(mo);
-    return string;
 }
 
 const char *object_property_get_type(Object *obj, const char *name, Error **errp)
@@ -1709,16 +1645,45 @@ static void object_instance_init(struct uc_struct *uc, Object *obj, void *opaque
 void register_types_object(struct uc_struct *uc)
 {
     static TypeInfo interface_info = {
-        .name = TYPE_INTERFACE,
-        .class_size = sizeof(InterfaceClass),
-        .abstract = true,
+        TYPE_INTERFACE,	// name
+        NULL,
+
+        sizeof(InterfaceClass),	// class_size
+        0,
+        NULL,
+
+        NULL,
+        NULL,
+        NULL,
+
+        NULL,
+
+        NULL,
+        NULL,
+        NULL,
+
+        true,	// abstract
     };
 
     static TypeInfo object_info = {
-        .name = TYPE_OBJECT,
-        .instance_size = sizeof(Object),
-        .instance_init = object_instance_init,
-        .abstract = true,
+        TYPE_OBJECT,
+        NULL,
+
+        0,
+        sizeof(Object),
+        NULL,
+
+        object_instance_init,
+        NULL,
+        NULL,
+
+        NULL,
+
+        NULL,
+        NULL,
+        NULL,
+
+        true,
     };
 
     uc->type_interface = type_register_internal(uc, &interface_info);

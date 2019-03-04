@@ -16,21 +16,15 @@
 
 #ifndef CONFIG_USER_ONLY
 
-#define DIRTY_MEMORY_VGA       0
-#define DIRTY_MEMORY_CODE      1
-#define DIRTY_MEMORY_MIGRATION 2
-#define DIRTY_MEMORY_NUM       3        /* num of dirty bits */
+#define DIRTY_MEMORY_CODE      0
+#define DIRTY_MEMORY_NUM       1        /* num of dirty bits */
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "unicorn/platform.h"
 #include "qemu-common.h"
 #include "exec/cpu-common.h"
-#ifndef CONFIG_USER_ONLY
 #include "exec/hwaddr.h"
-#endif
 #include "qemu/queue.h"
 #include "qemu/int128.h"
-#include "qemu/notify.h"
 #include "qapi/error.h"
 #include "qom/object.h"
 
@@ -132,9 +126,6 @@ struct MemoryRegionIOMMUOps {
     IOMMUTLBEntry (*translate)(MemoryRegion *iommu, hwaddr addr, bool is_write);
 };
 
-typedef struct CoalescedMemoryRange CoalescedMemoryRange;
-typedef struct MemoryRegionIoeventfd MemoryRegionIoeventfd;
-
 struct MemoryRegion {
     Object parent_obj;
     /* All fields are private - violators will be prosecuted */
@@ -156,19 +147,14 @@ struct MemoryRegion {
     bool enabled;
     bool rom_device;
     bool warning_printed; /* For reservations */
-    bool flush_coalesced_mmio;
     MemoryRegion *alias;
     hwaddr alias_offset;
     int32_t priority;
     bool may_overlap;
     QTAILQ_HEAD(subregions, MemoryRegion) subregions;
     QTAILQ_ENTRY(MemoryRegion) subregions_link;
-    QTAILQ_HEAD(coalesced_ranges, CoalescedMemoryRange) coalesced;
     const char *name;
     uint8_t dirty_log_mask;
-    unsigned ioeventfd_nb;
-    MemoryRegionIoeventfd *ioeventfds;
-    NotifierList iommu_notify;
     struct uc_struct *uc;
     uint32_t perms;   //all perms, partially redundant with readonly
     uint64_t end;
@@ -191,14 +177,6 @@ struct MemoryListener {
     void (*log_sync)(MemoryListener *listener, MemoryRegionSection *section);
     void (*log_global_start)(MemoryListener *listener);
     void (*log_global_stop)(MemoryListener *listener);
-    void (*eventfd_add)(MemoryListener *listener, MemoryRegionSection *section,
-                        bool match_data, uint64_t data, EventNotifier *e);
-    void (*eventfd_del)(MemoryListener *listener, MemoryRegionSection *section,
-                        bool match_data, uint64_t data, EventNotifier *e);
-    void (*coalesced_mmio_add)(MemoryListener *listener, MemoryRegionSection *section,
-                               hwaddr addr, hwaddr len);
-    void (*coalesced_mmio_del)(MemoryListener *listener, MemoryRegionSection *section,
-                               hwaddr addr, hwaddr len);
     /* Lower = earlier (during add), later (during del) */
     unsigned priority;
     AddressSpace *address_space_filter;
@@ -213,8 +191,6 @@ struct AddressSpace {
     char *name;
     MemoryRegion *root;
     struct FlatView *current_map;
-    int ioeventfd_nb;
-    struct MemoryRegionIoeventfd *ioeventfds;
     struct AddressSpaceDispatch *dispatch;
     struct AddressSpaceDispatch *next_dispatch;
     MemoryListener dispatch_listener;
@@ -242,6 +218,19 @@ struct MemoryRegionSection {
     hwaddr offset_within_address_space;
     bool readonly;
 };
+
+static inline MemoryRegionSection MemoryRegionSection_make(MemoryRegion *mr, AddressSpace *address_space,
+    hwaddr offset_within_region, Int128 size, hwaddr offset_within_address_space, bool readonly)
+{
+    MemoryRegionSection section;
+    section.mr = mr;
+    section.address_space = address_space;
+    section.offset_within_region = offset_within_region;
+    section.size = size;
+    section.offset_within_address_space = offset_within_address_space;
+    section.readonly = readonly;
+    return section;
+}
 
 /**
  * memory_region_init: Initialize a memory region
@@ -487,25 +476,6 @@ void memory_region_notify_iommu(MemoryRegion *mr,
                                 IOMMUTLBEntry entry);
 
 /**
- * memory_region_register_iommu_notifier: register a notifier for changes to
- * IOMMU translation entries.
- *
- * @mr: the memory region to observe
- * @n: the notifier to be added; the notifier receives a pointer to an
- *     #IOMMUTLBEntry as the opaque value; the pointer ceases to be
- *     valid on exit from the notifier.
- */
-void memory_region_register_iommu_notifier(MemoryRegion *mr, Notifier *n);
-
-/**
- * memory_region_unregister_iommu_notifier: unregister a notifier for
- * changes to IOMMU translation entries.
- *
- * @n: the notifier to be removed.
- */
-void memory_region_unregister_iommu_notifier(Notifier *n);
-
-/**
  * memory_region_name: get a memory region's name
  *
  * Returns the string that was used to initialize the memory region.
@@ -577,60 +547,6 @@ void memory_region_set_readonly(MemoryRegion *mr, bool readonly);
  * @romd_mode: %true to put the region into ROMD mode
  */
 void memory_region_rom_device_set_romd(MemoryRegion *mr, bool romd_mode);
-
-/**
- * memory_region_clear_coalescing: Disable MMIO coalescing for the region.
- *
- * Disables any coalescing caused by memory_region_set_coalescing() or
- * memory_region_add_coalescing().  Roughly equivalent to uncacheble memory
- * hardware.
- *
- * @mr: the memory region to be updated.
- */
-void memory_region_clear_coalescing(MemoryRegion *mr);
-
-/**
- * memory_region_add_eventfd: Request an eventfd to be triggered when a word
- *                            is written to a location.
- *
- * Marks a word in an IO region (initialized with memory_region_init_io())
- * as a trigger for an eventfd event.  The I/O callback will not be called.
- * The caller must be prepared to handle failure (that is, take the required
- * action if the callback _is_ called).
- *
- * @mr: the memory region being updated.
- * @addr: the address within @mr that is to be monitored
- * @size: the size of the access to trigger the eventfd
- * @match_data: whether to match against @data, instead of just @addr
- * @data: the data to match against the guest write
- * @fd: the eventfd to be triggered when @addr, @size, and @data all match.
- **/
-void memory_region_add_eventfd(MemoryRegion *mr,
-                               hwaddr addr,
-                               unsigned size,
-                               bool match_data,
-                               uint64_t data,
-                               EventNotifier *e);
-
-/**
- * memory_region_del_eventfd: Cancel an eventfd.
- *
- * Cancels an eventfd trigger requested by a previous
- * memory_region_add_eventfd() call.
- *
- * @mr: the memory region being updated.
- * @addr: the address within @mr that is to be monitored
- * @size: the size of the access to trigger the eventfd
- * @match_data: whether to match against @data, instead of just @addr
- * @data: the data to match against the guest write
- * @fd: the eventfd to be triggered when @addr, @size, and @data all match.
- */
-void memory_region_del_eventfd(MemoryRegion *mr,
-                               hwaddr addr,
-                               unsigned size,
-                               bool match_data,
-                               uint64_t data,
-                               EventNotifier *e);
 
 /**
  * memory_region_add_subregion: Add a subregion to a container.
@@ -938,8 +854,8 @@ void address_space_unmap(AddressSpace *as, void *buffer, hwaddr len,
 
 void memory_register_types(struct uc_struct *uc);
 
-MemoryRegion *memory_map(struct uc_struct *uc, ram_addr_t begin, size_t size, uint32_t perms);
-MemoryRegion *memory_map_ptr(struct uc_struct *uc, ram_addr_t begin, size_t size, uint32_t perms, void *ptr);
+MemoryRegion *memory_map(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms);
+MemoryRegion *memory_map_ptr(struct uc_struct *uc, hwaddr begin, size_t size, uint32_t perms, void *ptr);
 void memory_unmap(struct uc_struct *uc, MemoryRegion *mr);
 int memory_free(struct uc_struct *uc);
 

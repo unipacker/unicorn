@@ -19,20 +19,22 @@
 
 static int tosa_init(struct uc_struct *uc, MachineState *machine)
 {
-    //cpu_arm_init(uc, "pxa255");
-    cpu_arm_init(uc, "cortex-a15"); // FIXME
+    if (uc->mode & UC_MODE_MCLASS) {
+        uc->cpu = (CPUState *)cpu_arm_init(uc, "cortex-m3");
+    } else {
+        uc->cpu = (CPUState *)cpu_arm_init(uc, "cortex-a15");
+    }
 
     return 0;
 }
 
 void tosa_machine_init(struct uc_struct *uc)
 {
-    static QEMUMachine tosapda_machine = {
-        .name = "tosa",
-        .init = tosa_init,
-        .is_default = 1,
-        .arch = UC_ARCH_ARM,
-    };
+    static QEMUMachine tosapda_machine = { 0 };
+    tosapda_machine.name = "tosa",
+    tosapda_machine.init = tosa_init,
+    tosapda_machine.is_default = 1,
+    tosapda_machine.arch = UC_ARCH_ARM,
 
     qemu_register_machine(uc, &tosapda_machine, TYPE_MACHINE, NULL);
 }

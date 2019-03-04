@@ -14,7 +14,6 @@
 #include "hw/hw.h"
 #include "hw/mips/mips.h"
 #include "hw/mips/cpudevs.h"
-#include "hw/mips/bios.h"
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
 #include "exec/address-spaces.h"
@@ -23,8 +22,6 @@
 static int mips_r4k_init(struct uc_struct *uc, MachineState *machine)
 {
     const char *cpu_model = machine->cpu_model;
-    MIPSCPU *cpu;
-
 
     /* init CPUs */
     if (cpu_model == NULL) {
@@ -35,8 +32,8 @@ static int mips_r4k_init(struct uc_struct *uc, MachineState *machine)
 #endif
     }
 
-    cpu = cpu_mips_init(uc, cpu_model);
-    if (cpu == NULL) {
+    uc->cpu = (void*) cpu_mips_init(uc, cpu_model);
+    if (uc->cpu == NULL) {
         fprintf(stderr, "Unable to find CPU definition\n");
         return -1;
     }
@@ -47,10 +44,13 @@ static int mips_r4k_init(struct uc_struct *uc, MachineState *machine)
 void mips_machine_init(struct uc_struct *uc)
 {
     static QEMUMachine mips_machine = {
-        .name = "mips",
-        .init = mips_r4k_init,
-        .is_default = 1,
-        .arch = UC_ARCH_MIPS,
+        NULL,
+        "mips",
+        mips_r4k_init,
+        NULL,
+        0,
+        1,
+        UC_ARCH_MIPS,
     };
 
     qemu_register_machine(uc, &mips_machine, TYPE_MACHINE, NULL);

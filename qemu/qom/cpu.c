@@ -24,14 +24,11 @@
 
 bool cpu_exists(struct uc_struct* uc, int64_t id)
 {
-    CPUState *cpu;
+    CPUState *cpu = uc->cpu;
+    CPUClass *cc = CPU_GET_CLASS(uc, cpu);
 
-    CPU_FOREACH(cpu) {
-        CPUClass *cc = CPU_GET_CLASS(uc, cpu);
-
-        if (cc->get_arch_id(cpu) == id) {
-            return true;
-        }
+    if (cc->get_arch_id(cpu) == id) {
+        return true;
     }
     return false;
 }
@@ -92,7 +89,7 @@ void cpu_get_memory_mapping(CPUState *cpu, MemoryMappingList *list,
 {
     CPUClass *cc = CPU_GET_CLASS(cpu->uc, cpu);
 
-    return cc->get_memory_mapping(cpu, list, errp);
+    cc->get_memory_mapping(cpu, list, errp);
 }
 
 static void cpu_common_get_memory_mapping(CPUState *cpu,
@@ -261,13 +258,24 @@ static void cpu_class_init(struct uc_struct *uc, ObjectClass *klass, void *data)
 }
 
 static const TypeInfo cpu_type_info = {
-    .name = TYPE_CPU,
-    .parent = TYPE_DEVICE,
-    .instance_size = sizeof(CPUState),
-    .instance_init = cpu_common_initfn,
-    .abstract = true,
-    .class_size = sizeof(CPUClass),
-    .class_init = cpu_class_init,
+    TYPE_CPU,
+    TYPE_DEVICE,
+
+    sizeof(CPUClass),
+    sizeof(CPUState),
+    NULL,
+
+    cpu_common_initfn,
+    NULL,
+    NULL,
+
+    NULL,
+
+    cpu_class_init,
+    NULL,
+    NULL,
+
+    true,
 };
 
 void cpu_register_types(struct uc_struct *uc)

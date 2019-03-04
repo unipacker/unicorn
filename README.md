@@ -1,6 +1,8 @@
 Unicorn Engine
 ==============
 
+[![Join the chat at https://gitter.im/unicorn-engine/chat](https://badges.gitter.im/unicorn-engine/unicorn.svg)](https://gitter.im/unicorn-engine/chat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![Build Status](https://travis-ci.org/unicorn-engine/unicorn.svg?branch=master)](https://travis-ci.org/unicorn-engine/unicorn)
 [![Build status](https://ci.appveyor.com/api/projects/status/kojr7bald748ba2x/branch/master?svg=true)](https://ci.appveyor.com/project/aquynh/unicorn/branch/master)
 
@@ -11,7 +13,7 @@ Unicorn offers some unparalleled features:
 
 - Multi-architecture: ARM, ARM64 (ARMv8), M68K, MIPS, SPARC, and X86 (16, 32, 64-bit)
 - Clean/simple/lightweight/intuitive architecture-neutral API
-- Implemented in pure C language, with bindings for Python, Java, and Go
+- Implemented in pure C language, with bindings for Crystal, Clojure, Visual Basic, Perl, Rust, Ruby, Python, Java, .NET, Go, Delphi/Free Pascal and Haskell.
 - Native support for Windows & *nix (with Mac OSX, Linux, *BSD & Solaris confirmed)
 - High performance via Just-In-Time compilation
 - Support for fine-grained instrumentation at various levels
@@ -30,7 +32,7 @@ This project is released under the [GPL license](COPYING).
 Compilation & Docs
 ------------------
 
-See [COMPILE.TXT](COMPILE.TXT) file for how to compile and install Unicorn.
+See [docs/COMPILE.md](docs/COMPILE.md) file for how to compile and install Unicorn.
 
 More documentation is available in [docs/README.md](docs/README.md).
 

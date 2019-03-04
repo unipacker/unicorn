@@ -58,7 +58,7 @@ void cpu_smm_update(CPUX86State *env)
 {
     struct uc_struct *uc = x86_env_get_cpu(env)->parent_obj.uc;
 
-    if (smm_set && smm_arg && CPU(x86_env_get_cpu(env)) == first_cpu) {
+    if (smm_set && smm_arg && CPU(x86_env_get_cpu(env)) == uc->cpu) {
         smm_set(!!(env->hflags & HF_SMM_MASK), smm_arg);
     }
 }
@@ -104,7 +104,7 @@ static X86CPU *pc_new_cpu(struct uc_struct *uc, const char *cpu_model, int64_t a
     }
 
     object_property_set_int(uc, OBJECT(cpu), apic_id, "apic-id", &local_err);
-    object_property_set_bool(uc, OBJECT(cpu), true, "realized", &local_err);    // qq
+    object_property_set_bool(uc, OBJECT(cpu), true, "realized", &local_err);
 
     if (local_err) {
         error_propagate(errp, local_err);
@@ -129,7 +129,7 @@ int pc_cpus_init(struct uc_struct *uc, const char *cpu_model)
     }
 
     for (i = 0; i < smp_cpus; i++) {
-        uc->cpu = pc_new_cpu(uc, cpu_model, x86_cpu_apic_id_from_index(i), &error); // qq
+        uc->cpu = (CPUState *)pc_new_cpu(uc, cpu_model, x86_cpu_apic_id_from_index(i), &error);
         if (error) {
             //error_report("%s", error_get_pretty(error));
             error_free(error);
@@ -149,16 +149,30 @@ static void pc_machine_class_init(struct uc_struct *uc, ObjectClass *oc, void *d
 }
 
 static const TypeInfo pc_machine_info = {
-    .name = TYPE_PC_MACHINE,
-    .parent = TYPE_MACHINE,
-    .abstract = true,
-    .instance_size = sizeof(PCMachineState),
-    .instance_init = pc_machine_initfn,
-    .class_size = sizeof(PCMachineClass),
-    .class_init = pc_machine_class_init,
-    .interfaces = (InterfaceInfo[]) {
-         { }
-    },
+    TYPE_PC_MACHINE,
+    TYPE_MACHINE,
+
+    sizeof(PCMachineClass),
+    sizeof(PCMachineState),
+    NULL,
+
+    pc_machine_initfn,
+    NULL,
+    NULL,
+
+    NULL,
+
+    pc_machine_class_init,
+    NULL,
+    NULL,
+
+    true,
+
+    NULL,
+    NULL,
+
+    // should this be added somehow?
+    //.interfaces = (InterfaceInfo[]) { { } },
 };
 
 void pc_machine_register_types(struct uc_struct *uc)

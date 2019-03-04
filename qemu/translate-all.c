@@ -19,6 +19,7 @@
 /* Modified for Unicorn Engine by Nguyen Anh Quynh, 2015 */
 
 #ifdef _WIN32
+#include <winsock2.h>
 #include <windows.h>
 #else
 #include <sys/types.h>
@@ -28,7 +29,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <inttypes.h>
+#include "unicorn/platform.h"
 
 #include "config.h"
 
@@ -43,7 +44,6 @@
 #if __FreeBSD_version >= 700104
 #define HAVE_KINFO_GETVMMAP
 #define sigqueue sigqueue_freebsd  /* avoid redefinition */
-#include <sys/time.h>
 #include <sys/proc.h>
 #include <machine/profile.h>
 #define _KERNEL
@@ -62,8 +62,6 @@
 #include "qemu/timer.h"
 
 #include "uc_priv.h"
-
-#define USE_STATIC_CODE_GEN_BUFFER
 
 //#define DEBUG_TB_INVALIDATE
 //#define DEBUG_FLUSH
@@ -128,6 +126,9 @@ static void tb_link_page(struct uc_struct *uc, TranslationBlock *tb,
     tb_page_addr_t phys_pc, tb_page_addr_t phys_page2);
 static TranslationBlock *tb_find_pc(struct uc_struct *uc, uintptr_t tc_ptr);
 
+// Unicorn: for cleaning up memory later.
+void free_code_gen_buffer(struct uc_struct *uc);
+
 static void cpu_gen_init(struct uc_struct *uc)
 {
     uc->tcg_ctx = g_malloc(sizeof(TCGContext));
@@ -139,7 +140,7 @@ static void tb_clean_internal(struct uc_struct *uc, int i, void** lp)
     if (i == 0 || lp == 0) {
         return;
     }
-    tb_clean_internal(uc, i-1, (*lp) + ((0 >> (i * V_L2_BITS)) & (V_L2_SIZE - 1)));
+    tb_clean_internal(uc, i-1, (void*)(((char*)*lp) + ((0 >> (i * V_L2_BITS)) & (V_L2_SIZE - 1))));
     if (lp && *lp) {
         g_free(*lp);
     }
@@ -178,12 +179,12 @@ static int cpu_gen_code(CPUArchState *env, TranslationBlock *tb, int *gen_code_s
 
     gen_intermediate_code(env, tb);
 
-    // Unicorn: when tracing block, patch 1st operand for block size
-    if (env->uc->block_addr == tb->pc && HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_BLOCK, tb->pc)) {
+    // Unicorn: when tracing block, patch block size operand for callback
+    if (env->uc->size_arg != -1 && HOOK_EXISTS_BOUNDED(env->uc, UC_HOOK_BLOCK, tb->pc)) {
         if (env->uc->block_full)    // block size is unknown
-            *(s->gen_opparam_buf + 1) = 0;
+            *(s->gen_opparam_buf + env->uc->size_arg) = 0;
         else
-            *(s->gen_opparam_buf + 1) = tb->size;
+            *(s->gen_opparam_buf + env->uc->size_arg) = tb->size;
     }
 
     /* generate machine code */
@@ -287,14 +288,14 @@ bool cpu_restore_state(CPUState *cpu, uintptr_t retaddr)
 }
 
 #ifdef _WIN32
-static inline void map_exec(void *addr, long size)
+static inline QEMU_UNUSED_FUNC void map_exec(void *addr, long size)
 {
     DWORD old_protect;
     VirtualProtect(addr, size,
                    PAGE_EXECUTE_READWRITE, &old_protect);
 }
 #else
-static inline void map_exec(void *addr, long size)
+static inline QEMU_UNUSED_FUNC void map_exec(void *addr, long size)
 {
     unsigned long start, end, page_size;
 
@@ -501,7 +502,7 @@ static inline PageDesc *page_find(struct uc_struct *uc, tb_page_addr_t index)
 # define MAX_CODE_GEN_BUFFER_SIZE  ((size_t)-1)
 #endif
 
-#define DEFAULT_CODE_GEN_BUFFER_SIZE_1 (32u * 1024 * 1024)
+#define DEFAULT_CODE_GEN_BUFFER_SIZE_1 (8 * 1024 * 1024)
 
 #define DEFAULT_CODE_GEN_BUFFER_SIZE \
   (DEFAULT_CODE_GEN_BUFFER_SIZE_1 < MAX_CODE_GEN_BUFFER_SIZE \
@@ -520,7 +521,7 @@ static inline size_t size_code_gen_buffer(struct uc_struct *uc, size_t tb_size)
         /* ??? If we relax the requirement that CONFIG_USER_ONLY use the
            static buffer, we could size this on RESERVED_VA, on the text
            segment size of the executable, or continue to use the default.  */
-        tb_size = (unsigned long)(uc->ram_size / 4);
+        tb_size = (unsigned long)DEFAULT_CODE_GEN_BUFFER_SIZE;
 #endif
     }
     if (tb_size < MIN_CODE_GEN_BUFFER_SIZE) {
@@ -562,8 +563,12 @@ static inline void *split_cross_256mb(struct uc_struct *uc, void *buf1, size_t s
 #endif
 
 #ifdef USE_STATIC_CODE_GEN_BUFFER
-static uint8_t static_code_gen_buffer[DEFAULT_CODE_GEN_BUFFER_SIZE]
-    __attribute__((aligned(CODE_GEN_ALIGN)));
+static uint8_t QEMU_ALIGN(CODE_GEN_ALIGN, static_code_gen_buffer[DEFAULT_CODE_GEN_BUFFER_SIZE]);
+
+void free_code_gen_buffer(struct uc_struct *uc)
+{
+    // Do nothing, we use a static buffer.
+}
 
 static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
 {
@@ -578,6 +583,13 @@ static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
     return buf;
 }
 #elif defined(USE_MMAP)
+void free_code_gen_buffer(struct uc_struct *uc)
+{
+    TCGContext *tcg_ctx = uc->tcg_ctx;
+    if (tcg_ctx->code_gen_buffer)
+        munmap(tcg_ctx->code_gen_buffer, tcg_ctx->code_gen_buffer_size);
+}
+
 static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
 {
     int flags = MAP_PRIVATE | MAP_ANONYMOUS;
@@ -650,6 +662,13 @@ static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
     return buf;
 }
 #else
+void free_code_gen_buffer(struct uc_struct *uc)
+{
+    TCGContext *tcg_ctx = uc->tcg_ctx;
+    if (tcg_ctx->code_gen_buffer)
+        g_free(tcg_ctx->code_gen_buffer);
+}
+
 static inline void *alloc_code_gen_buffer(struct uc_struct *uc)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
@@ -699,7 +718,7 @@ static inline void code_gen_alloc(struct uc_struct *uc, size_t tb_size)
        from TB's to the prologue are going to be in range.  It also means
        that we don't need to mark (additional) portions of the data segment
        as executable.  */
-    tcg_ctx->code_gen_prologue = tcg_ctx->code_gen_buffer +
+    tcg_ctx->code_gen_prologue = (char*)tcg_ctx->code_gen_buffer +
             tcg_ctx->code_gen_buffer_size - 1024;
     tcg_ctx->code_gen_buffer_size -= 1024;
 
@@ -745,7 +764,7 @@ static TranslationBlock *tb_alloc(struct uc_struct *uc, target_ulong pc)
     TCGContext *tcg_ctx = uc->tcg_ctx;
 
     if (tcg_ctx->tb_ctx.nb_tbs >= tcg_ctx->code_gen_max_blocks ||
-        (tcg_ctx->code_gen_ptr - tcg_ctx->code_gen_buffer) >=
+        (size_t)(((char*)tcg_ctx->code_gen_ptr - (char*)tcg_ctx->code_gen_buffer)) >=
          tcg_ctx->code_gen_buffer_max_size) {
         return NULL;
     }
@@ -829,15 +848,13 @@ void tb_flush(CPUArchState *env1)
            ((unsigned long)(tcg_ctx->code_gen_ptr - tcg_ctx->code_gen_buffer)) /
            tcg_ctx->tb_ctx.nb_tbs : 0);
 #endif
-    if ((unsigned long)(tcg_ctx->code_gen_ptr - tcg_ctx->code_gen_buffer)
+    if ((unsigned long)((char*)tcg_ctx->code_gen_ptr - (char*)tcg_ctx->code_gen_buffer)
         > tcg_ctx->code_gen_buffer_size) {
         cpu_abort(cpu, "Internal error: code buffer overflow\n");
     }
     tcg_ctx->tb_ctx.nb_tbs = 0;
 
-    CPU_FOREACH(cpu) {
-        memset(cpu->tb_jmp_cache, 0, sizeof(cpu->tb_jmp_cache));
-    }
+    memset(cpu->tb_jmp_cache, 0, sizeof(cpu->tb_jmp_cache));
 
     memset(tcg_ctx->tb_ctx.tb_phys_hash, 0, sizeof(tcg_ctx->tb_ctx.tb_phys_hash));
     page_flush_tb(uc);
@@ -954,7 +971,7 @@ static inline void tb_jmp_remove(TranslationBlock *tb, int n)
    another TB */
 static inline void tb_reset_jump(TranslationBlock *tb, int n)
 {
-    tb_set_jmp_target(tb, n, (uintptr_t)(tb->tc_ptr + tb->tb_next_offset[n]));
+    tb_set_jmp_target(tb, n, (uintptr_t)((char*)tb->tc_ptr + tb->tb_next_offset[n]));
 }
 
 /* invalidate one TB */
@@ -962,7 +979,7 @@ void tb_phys_invalidate(struct uc_struct *uc,
     TranslationBlock *tb, tb_page_addr_t page_addr)
 {
     TCGContext *tcg_ctx = uc->tcg_ctx;
-    CPUState *cpu;
+    CPUState *cpu = uc->cpu;
     PageDesc *p;
     unsigned int h, n1;
     tb_page_addr_t phys_pc;
@@ -989,10 +1006,8 @@ void tb_phys_invalidate(struct uc_struct *uc,
 
     /* remove the TB from the hash list */
     h = tb_jmp_cache_hash_func(tb->pc);
-    CPU_FOREACH(cpu) {
-        if (cpu->tb_jmp_cache[h] == tb) {
-            cpu->tb_jmp_cache[h] = NULL;
-        }
+    if (cpu->tb_jmp_cache[h] == tb) {
+        cpu->tb_jmp_cache[h] = NULL;
     }
 
     /* suppress this TB from the two jump lists */
@@ -1505,8 +1520,8 @@ void tb_invalidate_phys_addr(AddressSpace *as, hwaddr addr)
           || memory_region_is_romd(mr))) {
         return;
     }
-    ram_addr = (memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK)
-        + addr;
+    ram_addr = (ram_addr_t)((memory_region_get_ram_addr(mr) & TARGET_PAGE_MASK)
+        + addr);
     tb_invalidate_phys_page_range(as->uc, ram_addr, ram_addr + 1, 0);
 }
 #endif /* TARGET_HAS_ICE && !defined(CONFIG_USER_ONLY) */
@@ -1530,15 +1545,6 @@ void tb_check_watchpoint(CPUState *cpu)
 static void tcg_handle_interrupt(CPUState *cpu, int mask)
 {
     cpu->interrupt_request |= mask;
-
-    /*
-     * If called from iothread context, wake the target cpu in
-     * case its halted.
-     */
-    if (!qemu_cpu_is_self(cpu)) {
-        qemu_cpu_kick(cpu);
-        return;
-    }
 
     cpu->tcg_exit_req = 1;
 }
@@ -1597,7 +1603,7 @@ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
     tb_phys_invalidate(cpu->uc, tb, -1);
     /* FIXME: In theory this could raise an exception.  In practice
        we have already translated the block once so it's probably ok.  */
-    tb_gen_code(cpu, pc, cs_base, flags, cflags);
+    tb_gen_code(cpu, pc, cs_base, (int)flags, cflags);
     /* TODO: If env->pc != tb->pc (i.e. the faulting instruction was not
        the first in the TB) then we end up generating a whole new TB and
        repeating the fault, which is horribly inefficient.

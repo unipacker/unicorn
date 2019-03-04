@@ -120,8 +120,7 @@
 #endif
 
 /* macro to check the victim tlb */
-#define VICTIM_TLB_HIT(ty)                                                    \
-({                                                                            \
+#define VICTIM_TLB_HIT(ty)                                              \
     /* we are about to do a page table walk. our last hope is the             \
      * victim tlb. try to refill from the victim tlb before walking the       \
      * page table. */                                                         \
@@ -141,8 +140,20 @@
         }                                                                     \
     }                                                                         \
     /* return true when there is a vtlb hit, i.e. vidx >=0 */                 \
-    vidx >= 0;                                                                \
-})
+    return (vidx >= 0)
+
+#ifndef victim_tlb_hit_funcs
+#define victim_tlb_hit_funcs
+static inline bool victim_tlb_hit_read(CPUArchState *env, target_ulong addr, int mmu_idx, int index)
+{
+    VICTIM_TLB_HIT(ADDR_READ);
+}
+
+static inline bool victim_tlb_hit_write(CPUArchState *env, target_ulong addr, int mmu_idx, int index)
+{
+    VICTIM_TLB_HIT(addr_write);
+}
+#endif // victim_tlb_hit_funcs
 
 #ifndef SOFTMMU_CODE_ACCESS
 static inline DATA_TYPE glue(io_read, SUFFIX)(CPUArchState *env,
@@ -163,12 +174,12 @@ static inline DATA_TYPE glue(io_read, SUFFIX)(CPUArchState *env,
 
     cpu->mem_io_vaddr = addr;
     io_mem_read(mr, physaddr, &val, 1 << SHIFT);
-    return val;
+    return (DATA_TYPE)val;
 }
 #endif
 
 #ifdef SOFTMMU_CODE_ACCESS
-static __attribute__((unused))
+static QEMU_UNUSED_FUNC
 #endif
 WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
                             uintptr_t retaddr)
@@ -180,6 +191,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     int error_code;
     struct hook *hook;
     bool handled;
+    HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
     MemoryRegion *mr = memory_mapping(uc, addr);
@@ -240,6 +252,10 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 #endif
 
     // Unicorn: callback on memory read
+    // NOTE: this happens before the actual read, so we cannot tell
+    // the callback if read access is succesful, or not.
+    // See UC_HOOK_MEM_READ_AFTER & UC_MEM_READ_AFTER if you only care
+    // about successful read
     if (READ_ACCESS_TYPE == MMU_DATA_LOAD) {
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ) {
             if (!HOOK_BOUND_CHECK(hook, addr))
@@ -289,7 +305,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
             return 0;
         }
 #endif
-        if (!VICTIM_TLB_HIT(ADDR_READ)) {
+        if (!victim_tlb_hit_read(env, addr, mmu_idx, index)) {
             tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                      mmu_idx, retaddr);
         }
@@ -317,7 +333,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
            byte ordering.  We should push the LE/BE request down into io.  */
         res = glue(io_read, SUFFIX)(env, ioaddr, addr, retaddr);
         res = TGT_LE(res);
-        return res;
+        goto _out;
     }
 
     /* Handle slow unaligned access (it spans two pages or IO).  */
@@ -350,7 +366,7 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 
         /* Little-endian combine.  */
         res = (res1 >> shift) | (res2 << ((DATA_SIZE * 8) - shift));
-        return res;
+        goto _out;
     }
 
     /* Handle aligned access or unaligned access in the same page.  */
@@ -369,18 +385,29 @@ WORD_TYPE helper_le_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     }
 #endif
 
-    haddr = addr + env->tlb_table[mmu_idx][index].addend;
+    haddr = (uintptr_t)(addr + env->tlb_table[mmu_idx][index].addend);
 #if DATA_SIZE == 1
     res = glue(glue(ld, LSUFFIX), _p)((uint8_t *)haddr);
 #else
     res = glue(glue(ld, LSUFFIX), _le_p)((uint8_t *)haddr);
 #endif
+
+_out:
+    // Unicorn: callback on successful read
+    if (READ_ACCESS_TYPE == MMU_DATA_LOAD) {
+        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_AFTER) {
+            if (!HOOK_BOUND_CHECK(hook, addr))
+                continue;
+            ((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ_AFTER, addr, DATA_SIZE, res, hook->user_data);
+        }
+    }
+
     return res;
 }
 
 #if DATA_SIZE > 1
 #ifdef SOFTMMU_CODE_ACCESS
-static __attribute__((unused))
+static QEMU_UNUSED_FUNC
 #endif
 WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
                             uintptr_t retaddr)
@@ -392,6 +419,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     int error_code;
     struct hook *hook;
     bool handled;
+    HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
     MemoryRegion *mr = memory_mapping(uc, addr);
@@ -452,6 +480,10 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 #endif
 
     // Unicorn: callback on memory read
+    // NOTE: this happens before the actual read, so we cannot tell
+    // the callback if read access is succesful, or not.
+    // See UC_HOOK_MEM_READ_AFTER & UC_MEM_READ_AFTER if you only care
+    // about successful read
     if (READ_ACCESS_TYPE == MMU_DATA_LOAD) {
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ) {
             if (!HOOK_BOUND_CHECK(hook, addr))
@@ -501,7 +533,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
             return 0;
         }
 #endif
-        if (!VICTIM_TLB_HIT(ADDR_READ)) {
+        if (!victim_tlb_hit_read(env, addr, mmu_idx, index)) {
             tlb_fill(ENV_GET_CPU(env), addr, READ_ACCESS_TYPE,
                      mmu_idx, retaddr);
         }
@@ -528,7 +560,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
            byte ordering.  We should push the LE/BE request down into io.  */
         res = glue(io_read, SUFFIX)(env, ioaddr, addr, retaddr);
         res = TGT_BE(res);
-        return res;
+        goto _out;
     }
 
     /* Handle slow unaligned access (it spans two pages or IO).  */
@@ -561,7 +593,7 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
 
         /* Big-endian combine.  */
         res = (res1 << shift) | (res2 >> ((DATA_SIZE * 8) - shift));
-        return res;
+        goto _out;
     }
 
     /* Handle aligned access or unaligned access in the same page.  */
@@ -580,8 +612,19 @@ WORD_TYPE helper_be_ld_name(CPUArchState *env, target_ulong addr, int mmu_idx,
     }
 #endif
 
-    haddr = addr + env->tlb_table[mmu_idx][index].addend;
+    haddr = (uintptr_t)(addr + env->tlb_table[mmu_idx][index].addend);
     res = glue(glue(ld, LSUFFIX), _be_p)((uint8_t *)haddr);
+
+_out:
+    // Unicorn: callback on successful read
+    if (READ_ACCESS_TYPE == MMU_DATA_LOAD) {
+        HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ_AFTER) {
+            if (!HOOK_BOUND_CHECK(hook, addr))
+                continue;
+            ((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ_AFTER, addr, DATA_SIZE, res, hook->user_data);
+        }
+    }
+
     return res;
 }
 #endif /* DATA_SIZE > 1 */
@@ -641,6 +684,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     uintptr_t haddr;
     struct hook *hook;
     bool handled;
+    HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
     MemoryRegion *mr = memory_mapping(uc, addr);
@@ -712,7 +756,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             return;
         }
 #endif
-        if (!VICTIM_TLB_HIT(addr_write)) {
+        if (!victim_tlb_hit_write(env, addr, mmu_idx, index)) {
             tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
@@ -759,7 +803,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
          * previous page from the TLB cache.  */
         for (i = DATA_SIZE - 1; i >= 0; i--) {
             /* Little-endian extract.  */
-            uint8_t val8 = val >> (i * 8);
+            uint8_t val8 = (uint8_t)(val >> (i * 8));
             /* Note the adjustment at the beginning of the function.
                Undo that for the recursion.  */
             glue(helper_ret_stb, MMUSUFFIX)(env, addr + i, val8,
@@ -782,7 +826,7 @@ void helper_le_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     }
 #endif
 
-    haddr = addr + env->tlb_table[mmu_idx][index].addend;
+    haddr = (uintptr_t)(addr + env->tlb_table[mmu_idx][index].addend);
 #if DATA_SIZE == 1
     glue(glue(st, SUFFIX), _p)((uint8_t *)haddr, val);
 #else
@@ -799,6 +843,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     uintptr_t haddr;
     struct hook *hook;
     bool handled;
+    HOOK_FOREACH_VAR_DECLARE;
 
     struct uc_struct *uc = env->uc;
     MemoryRegion *mr = memory_mapping(uc, addr);
@@ -870,7 +915,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
             return;
         }
 #endif
-        if (!VICTIM_TLB_HIT(addr_write)) {
+        if (!victim_tlb_hit_write(env, addr, mmu_idx, index)) {
             tlb_fill(ENV_GET_CPU(env), addr, MMU_DATA_STORE, mmu_idx, retaddr);
         }
         tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
@@ -917,7 +962,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
          * previous page from the TLB cache.  */
         for (i = DATA_SIZE - 1; i >= 0; i--) {
             /* Big-endian extract.  */
-            uint8_t val8 = val >> (((DATA_SIZE - 1) * 8) - (i * 8));
+            uint8_t val8 = (uint8_t)(val >> (((DATA_SIZE - 1) * 8) - (i * 8)));
             /* Note the adjustment at the beginning of the function.
                Undo that for the recursion.  */
             glue(helper_ret_stb, MMUSUFFIX)(env, addr + i, val8,
@@ -940,7 +985,7 @@ void helper_be_st_name(CPUArchState *env, target_ulong addr, DATA_TYPE val,
     }
 #endif
 
-    haddr = addr + env->tlb_table[mmu_idx][index].addend;
+    haddr = (uintptr_t)(addr + env->tlb_table[mmu_idx][index].addend);
     glue(glue(st, SUFFIX), _be_p)((uint8_t *)haddr, val);
 }
 #endif /* DATA_SIZE > 1 */

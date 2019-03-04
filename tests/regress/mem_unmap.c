@@ -20,9 +20,7 @@
  */
 
 #define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -208,7 +206,7 @@ int main(int argc, char **argv, char **envp)
         printf("ok %d - Program written to memory\n", log_num++);
     }
 
-    if (uc_hook_add(uc, &trace2, UC_HOOK_CODE, hook_code, NULL, (uint64_t)1, (uint64_t)0) != UC_ERR_OK) {
+    if (uc_hook_add(uc, &trace2, UC_HOOK_CODE, hook_code, NULL, 1, 0) != UC_ERR_OK) {
         printf("not ok %d - Failed to install UC_HOOK_CODE ucr\n", log_num++);
         return 5;
     } else {
@@ -216,7 +214,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     // intercept memory write events
-    if (uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE, hook_mem_write, NULL, (uint64_t)1, (uint64_t)0) != UC_ERR_OK) {
+    if (uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE, hook_mem_write, NULL, 1, 0) != UC_ERR_OK) {
         printf("not ok %d - Failed to install UC_HOOK_MEM_WRITE ucr\n", log_num++);
         return 6;
     } else {
@@ -224,7 +222,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     // intercept invalid memory events
-    if (uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE_UNMAPPED, hook_mem_invalid, NULL) != UC_ERR_OK) {
+    if (uc_hook_add(uc, &trace1, UC_HOOK_MEM_WRITE_UNMAPPED, hook_mem_invalid, NULL, 1, 0) != UC_ERR_OK) {
         printf("not ok %d - Failed to install memory invalid handler\n", log_num++);
         return 7;
     } else {

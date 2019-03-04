@@ -1,4 +1,3 @@
-#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -11,7 +10,7 @@
 #define PAGE_4K (1 << 12)
 #define TARGET_PAGE_MASK ~(PAGE_4K - 1)
 #define TARGET_PAGE_PREPARE(addr) (((addr) + PAGE_4K - 1) & TARGET_PAGE_MASK)
-#define TARGET_PAGE_ALIGN(addr) (addr - (TARGET_PAGE_PREPARE(addr) - addr) & TARGET_PAGE_MASK)
+#define TARGET_PAGE_ALIGN(addr) ((addr - (TARGET_PAGE_PREPARE(addr) - addr)) & TARGET_PAGE_MASK)
 
 static uint64_t instructions = 0;
 
@@ -69,7 +68,6 @@ static void VM_exec()
 {
     uc_engine *uc;
     uc_err err;
-    uint32_t tmp;
     uc_hook trace1, trace2;
     unsigned int r_eax, r_ebx, r_ecx, r_edx, r_ebp, r_esp, r_esi, r_edi, r_eip, eflags;
     unsigned int tr_eax, tr_ebx, tr_ecx, tr_edx, tr_ebp, tr_esp, tr_esi, tr_edi, tr_eip, t_eflags;
@@ -105,7 +103,7 @@ static void VM_exec()
     err = uc_mem_write(uc, ADDRESS, X86_CODE32, sizeof(X86_CODE32) - 1);
     if(err != UC_ERR_OK)
     {
-        printf("Failed to write emulation code to memory, quit!: %s(len %lu)", uc_strerror(err), sizeof(X86_CODE32) - 1);
+        printf("Failed to write emulation code to memory, quit!: %s(len %zu)", uc_strerror(err), sizeof(X86_CODE32) - 1);
         return;
     }
 
@@ -120,10 +118,10 @@ static void VM_exec()
     uc_reg_write(uc, UC_X86_REG_EDI, &r_edi);
     uc_reg_write(uc, UC_X86_REG_EFLAGS, &eflags);
 
-    uc_hook_add(uc, &trace1, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED, (void *)hook_invalid_mem, NULL);
+    uc_hook_add(uc, &trace1, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED, (void *)hook_invalid_mem, NULL, 1, 0);
 
     // tracing all instruction by having @begin > @end
-    uc_hook_add(uc, &trace2, UC_HOOK_CODE, (void *)hook_ins, NULL, (uint64_t)1, (uint64_t)0);
+    uc_hook_add(uc, &trace2, UC_HOOK_CODE, (void *)hook_ins, NULL, 1, 0);
 
     // emulate machine code in infinite time
     err = uc_emu_start(uc, ADDRESS, ADDRESS + (sizeof(X86_CODE32) - 1), 0, 0);

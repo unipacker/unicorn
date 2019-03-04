@@ -42,19 +42,6 @@ void cpu_resume(CPUState *cpu)
 {
     cpu->stop = false;
     cpu->stopped = false;
-    qemu_cpu_kick(cpu);
-}
-
-void qemu_cpu_kick(CPUState *cpu)
-{
-    qemu_cond_broadcast(cpu->halt_cond);
-}
-
-
-void qemu_init_cpu_loop(struct uc_struct* uc)
-{
-    qemu_cond_init(&uc->qemu_cpu_cond);
-    qemu_mutex_init(&uc->qemu_global_mutex);
 }
 
 void cpu_stop_current(struct uc_struct *uc)
@@ -88,7 +75,7 @@ MachineClass *find_default_machine(struct uc_struct *uc, int arch)
     return mc;
 }
 
-__attribute__ ((visibility ("default")))
+DEFAULT_VISIBILITY
 int machine_initialize(struct uc_struct *uc)
 {
     MachineClass *machine_class;
@@ -115,15 +102,12 @@ int machine_initialize(struct uc_struct *uc)
 
     current_machine = MACHINE(uc, object_new(uc, object_class_get_name(
                     OBJECT_CLASS(machine_class))));
-
+    uc->machine_state = current_machine;
     current_machine->uc = uc;
     uc->cpu_exec_init_all(uc);
 
     machine_class->max_cpus = 1;
     configure_accelerator(current_machine);
-
-    qemu_init_cpu_loop(uc);
-    qemu_mutex_lock_iothread(uc);
 
     current_machine->cpu_model = NULL;
 
@@ -158,12 +142,11 @@ void qemu_register_machine(struct uc_struct *uc, QEMUMachine *m, const char *typ
         void (*init)(struct uc_struct *uc, ObjectClass *oc, void *data))
 {
     char *name = g_strconcat(m->name, TYPE_MACHINE_SUFFIX, NULL);
-    TypeInfo ti = {
-        .name       = name,
-        .parent     = type_machine,
-        .class_init = init,
-        .class_data = (void *)m,
-    };
+    TypeInfo ti = {0};
+    ti.name       = name;
+    ti.parent     = type_machine;
+    ti.class_init = init;
+    ti.class_data = (void *)m;
 
     if (init == NULL)
         ti.class_init = machine_class_init;

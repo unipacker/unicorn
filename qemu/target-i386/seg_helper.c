@@ -947,6 +947,7 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
 {
     // Unicorn: call registered syscall hooks
     struct hook *hook;
+    HOOK_FOREACH_VAR_DECLARE;
     HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
         if (!HOOK_BOUND_CHECK(hook, env->eip))
             continue;
@@ -956,7 +957,7 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
 
     env->eip += next_eip_addend;
     return;
-
+/*
     int selector;
 
     if (!(env->efer & MSR_EFER_SCE)) {
@@ -1005,6 +1006,7 @@ void helper_syscall(CPUX86State *env, int next_eip_addend)
                                DESC_W_MASK | DESC_A_MASK);
         env->eip = (uint32_t)env->star;
     }
+*/
 }
 #endif
 #endif
@@ -2307,6 +2309,7 @@ void helper_sysenter(CPUX86State *env, int next_eip_addend)
 {
     // Unicorn: call registered SYSENTER hooks
     struct hook *hook;
+    HOOK_FOREACH_VAR_DECLARE;
     HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
         if (!HOOK_BOUND_CHECK(hook, env->eip))
             continue;
@@ -2556,7 +2559,6 @@ void helper_verw(CPUX86State *env, target_ulong selector1)
     CC_SRC = eflags | CC_Z;
 }
 
-#if defined(CONFIG_USER_ONLY)
 void cpu_x86_load_seg(CPUX86State *env, int seg_reg, int selector)
 {
     if (!(env->cr[0] & CR0_PE_MASK) || (env->eflags & VM_MASK)) {
@@ -2570,7 +2572,6 @@ void cpu_x86_load_seg(CPUX86State *env, int seg_reg, int selector)
         helper_load_seg(env, seg_reg, selector);
     }
 }
-#endif
 
 /* check if Port I/O is allowed in TSS */
 static inline void check_io(CPUX86State *env, int addr, int size)

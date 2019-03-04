@@ -1,7 +1,5 @@
 #define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include <string.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -11,7 +9,6 @@
 int main(int argc, char **argv, char **envp)
 {
     uc_engine *uc;
-    uc_hook trace1, trace2;
     uc_err err;
 
     // Initialize emulator in X86-32bit mode

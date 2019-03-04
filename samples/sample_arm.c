@@ -3,28 +3,8 @@
 
 /* Sample code to demonstrate how to emulate ARM code */
 
-// windows specific
-#ifdef _MSC_VER
-#include <io.h>
-#include <windows.h>
-#define PRIx64 "llX"
-#ifdef DYNLOAD
-#include "unicorn_dynload.h"
-#else // DYNLOAD
 #include <unicorn/unicorn.h>
-#ifdef _WIN64
-#pragma comment(lib, "unicorn_staload64.lib")
-#else // _WIN64
-#pragma comment(lib, "unicorn_staload.lib")
-#endif // _WIN64
-#endif // DYNLOAD
-
-// posix specific
-#else // _MSC_VER
-#include <unistd.h>
-#include <inttypes.h>
-#include <unicorn/unicorn.h>
-#endif // _MSC_VER
+#include <string.h>
 
 
 // code to be emulated
@@ -135,7 +115,8 @@ static void test_thumb(void)
 
     // emulate machine code in infinite time (last param = 0), or when
     // finishing all the code.
-    err = uc_emu_start(uc, ADDRESS, ADDRESS + sizeof(THUMB_CODE) -1, 0, 0);
+    // Note we start at ADDRESS | 1 to indicate THUMB mode.
+    err = uc_emu_start(uc, ADDRESS | 1, ADDRESS + sizeof(THUMB_CODE) -1, 0, 0);
     if (err) {
         printf("Failed on uc_emu_start() with error returned: %u\n", err);
     }
@@ -151,7 +132,7 @@ static void test_thumb(void)
 
 int main(int argc, char **argv, char **envp)
 {
-	// dynamically load shared library
+    // dynamically load shared library
 #ifdef DYNLOAD
     if (!uc_dyn_load(NULL, 0)) {
         printf("Error dynamically loading shared library.\n");
@@ -162,7 +143,7 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
     
-	test_arm();
+    test_arm();
     printf("==========================\n");
     test_thumb();
 

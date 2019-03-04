@@ -67,9 +67,6 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
     struct hook *hook;
 
 
-    /* This must be volatile so it is not trashed by longjmp() */
-    volatile bool have_tb_lock = false;
-
     if (cpu->halted) {
         if (!cpu_has_work(cpu)) {
             return EXCP_HALTED;
@@ -130,14 +127,26 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
                     ret = cpu->exception_index;
                     break;
 #else
+                    bool catched = false;
                     // Unicorn: call registered interrupt callbacks
+                    HOOK_FOREACH_VAR_DECLARE;
                     HOOK_FOREACH(uc, hook, UC_HOOK_INTR) {
                         ((uc_cb_hookintr_t)hook->callback)(uc, cpu->exception_index, hook->user_data);
+                        catched = true;
+                    }
+                    // Unicorn: If un-catched interrupt, stop executions.
+                    if (!catched) {
+                        cpu->halted = 1;
+                        uc->invalid_error = UC_ERR_EXCEPTION;
+                        ret = EXCP_HLT;
+                        break;
                     }
                     cpu->exception_index = -1;
 #if defined(TARGET_X86_64)
-                    // point EIP to the next instruction after INT
-                    env->eip = env->exception_next_eip;
+                    if (env->exception_is_int) {
+                        // point EIP to the next instruction after INT
+                        env->eip = env->exception_next_eip;
+                    }
 #endif
 #if defined(TARGET_MIPS) || defined(TARGET_MIPS64)
                     env->active_tc.PC = uc->next_pc;
@@ -199,8 +208,6 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
                     cpu->exception_index = EXCP_INTERRUPT;
                     cpu_loop_exit(cpu);
                 }
-                spin_lock(&tcg_ctx->tb_ctx.tb_lock);
-                have_tb_lock = true;
                 tb = tb_find_fast(env);	// qq
                 if (!tb) {   // invalid TB due to invalid code?
                     uc->invalid_error = UC_ERR_FETCH_UNMAPPED;
@@ -223,8 +230,6 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
                     tb_add_jump((TranslationBlock *)(next_tb & ~TB_EXIT_MASK),
                             next_tb & TB_EXIT_MASK, tb);
                 }
-                have_tb_lock = false;
-                spin_unlock(&tcg_ctx->tb_ctx.tb_lock);
 
                 /* cpu_interrupt might be called while translating the
                    TB, but before it is linked into a potentially
@@ -266,10 +271,6 @@ int cpu_exec(struct uc_struct *uc, CPUArchState *env)   // qq
 #ifdef TARGET_I386
             x86_cpu = X86_CPU(uc, cpu);
 #endif
-            if (have_tb_lock) {
-                spin_unlock(&tcg_ctx->tb_ctx.tb_lock);
-                have_tb_lock = false;
-            }
         }
     } /* for(;;) */
 
@@ -367,7 +368,7 @@ static TranslationBlock *tb_find_slow(CPUArchState *env, target_ulong pc,
     }
 not_found:
     /* if no translated code available, then translate it now */
-    tb = tb_gen_code(cpu, pc, cs_base, flags, 0);   // qq
+    tb = tb_gen_code(cpu, pc, cs_base, (int)flags, 0);   // qq
 
 found:
     /* Move the last found TB to the head of the list */

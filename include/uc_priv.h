@@ -4,7 +4,7 @@
 #ifndef UC_PRIV_H
 #define UC_PRIV_H
 
-#include <stdint.h>
+#include "unicorn/platform.h"
 #include <stdio.h>
 
 #include "qemu.h"
@@ -13,7 +13,7 @@
 
 // These are masks of supported modes for each cpu/arch.
 // They should be updated when changes are made to the uc_mode enum typedef.
-#define UC_MODE_ARM_MASK    (UC_MODE_ARM|UC_MODE_THUMB|UC_MODE_LITTLE_ENDIAN)
+#define UC_MODE_ARM_MASK    (UC_MODE_ARM|UC_MODE_THUMB|UC_MODE_LITTLE_ENDIAN|UC_MODE_MCLASS|UC_MODE_BIG_ENDIAN)
 #define UC_MODE_MIPS_MASK   (UC_MODE_MIPS32|UC_MODE_MIPS64|UC_MODE_LITTLE_ENDIAN|UC_MODE_BIG_ENDIAN)
 #define UC_MODE_X86_MASK    (UC_MODE_16|UC_MODE_32|UC_MODE_64|UC_MODE_LITTLE_ENDIAN)
 #define UC_MODE_PPC_MASK    (UC_MODE_PPC64|UC_MODE_BIG_ENDIAN)
@@ -27,13 +27,11 @@
 #define READ_WORD(x) (x & 0xffff)
 #define READ_BYTE_H(x) ((x & 0xffff) >> 8)
 #define READ_BYTE_L(x) (x & 0xff)
-#define WRITE_DWORD(x, w) (x = (x & ~0xffffffff) | (w & 0xffffffff))
+#define WRITE_DWORD(x, w) (x = (x & ~0xffffffffLL) | (w & 0xffffffff))
 #define WRITE_WORD(x, w) (x = (x & ~0xffff) | (w & 0xffff))
 #define WRITE_BYTE_H(x, b) (x = (x & ~0xff00) | ((b & 0xff) << 8))
 #define WRITE_BYTE_L(x, b) (x = (x & ~0xff) | (b & 0xff))
 
-
-QTAILQ_HEAD(CPUTailQ, CPUState);
 
 typedef struct ModuleEntry {
     void (*init)(void);
@@ -46,8 +44,8 @@ typedef QTAILQ_HEAD(, ModuleEntry) ModuleTypeList;
 typedef uc_err (*query_t)(struct uc_struct *uc, uc_query_type type, size_t *result);
 
 // return 0 on success, -1 on failure
-typedef int (*reg_read_t)(struct uc_struct *uc, unsigned int regid, void *value);
-typedef int (*reg_write_t)(struct uc_struct *uc, unsigned int regid, const void *value);
+typedef int (*reg_read_t)(struct uc_struct *uc, unsigned int *regs, void **vals, int count);
+typedef int (*reg_write_t)(struct uc_struct *uc, unsigned int *regs, void *const *vals, int count);
 
 typedef void (*reg_reset_t)(struct uc_struct *uc);
 
@@ -62,17 +60,15 @@ typedef int (*uc_args_int_uc_t)(struct uc_struct*);
 
 typedef bool (*uc_args_tcg_enable_t)(struct uc_struct*);
 
-typedef void (*uc_minit_t)(struct uc_struct*, ram_addr_t);
-
 typedef void (*uc_args_uc_long_t)(struct uc_struct*, unsigned long);
 
 typedef void (*uc_args_uc_u64_t)(struct uc_struct *, uint64_t addr);
 
 typedef uc_err (*uc_args_uc_int_size_t)(struct uc_struct*, uc_opt_type, size_t);
 
-typedef MemoryRegion* (*uc_args_uc_ram_size_t)(struct uc_struct*,  ram_addr_t begin, size_t size, uint32_t perms);
+typedef MemoryRegion* (*uc_args_uc_ram_size_t)(struct uc_struct*,  hwaddr begin, size_t size, uint32_t perms);
 
-typedef MemoryRegion* (*uc_args_uc_ram_size_ptr_t)(struct uc_struct*,  ram_addr_t begin, size_t size, uint32_t perms, void *ptr);
+typedef MemoryRegion* (*uc_args_uc_ram_size_ptr_t)(struct uc_struct*,  hwaddr begin, size_t size, uint32_t perms, void *ptr);
 
 typedef void (*uc_mem_unmap_t)(struct uc_struct*, MemoryRegion *mr);
 
@@ -83,6 +79,9 @@ typedef bool (*uc_args_int_t)(int intno);
 
 // some architecture redirect virtual memory to physical memory like Mips
 typedef uint64_t (*uc_mem_redirect_t)(uint64_t address);
+
+// validate if Unicorn supports hooking a given instruction
+typedef bool(*uc_insn_hook_validate)(uint32_t insn_enum);
 
 struct hook {
     int type;            // UC_HOOK_*
@@ -109,13 +108,16 @@ enum uc_hook_idx {
     UC_HOOK_MEM_READ_IDX,
     UC_HOOK_MEM_WRITE_IDX,
     UC_HOOK_MEM_FETCH_IDX,
+    UC_HOOK_MEM_READ_AFTER_IDX,
 
     UC_HOOK_MAX,
 };
 
+#define HOOK_FOREACH_VAR_DECLARE                          \
+    struct list_item *cur
+
 // for loop macro to loop over hook lists
 #define HOOK_FOREACH(uc, hh, idx)                         \
-    struct list_item *cur;                                \
     for (                                                 \
         cur = (uc)->hook[idx##_IDX].head;                 \
         cur != NULL && ((hh) = (struct hook *)cur->data)  \
@@ -147,11 +149,6 @@ static inline bool _hook_exists_bounded(struct list_item *cur, uint64_t addr)
 struct uc_struct {
     uc_arch arch;
     uc_mode mode;
-    QemuMutex qemu_global_mutex; // qemu/cpus.c
-    QemuCond qemu_cpu_cond; // qemu/cpus.c
-    QemuThread *tcg_cpu_thread; // qemu/cpus.c
-    QemuCond *tcg_halt_cond; // qemu/cpus.c
-    struct CPUTailQ cpus;   // qemu/cpu-exec.c
     uc_err errnum;  // qemu/cpu-exec.c
     AddressSpace as;
     query_t query;
@@ -165,7 +162,7 @@ struct uc_struct {
     uc_args_uc_u64_t set_pc;  // set PC for tracecode
     uc_args_int_t stop_interrupt;   // check if the interrupt should stop emulation
 
-    uc_args_uc_t init_arch, pause_all_vcpus, cpu_exec_init_all;
+    uc_args_uc_t init_arch, cpu_exec_init_all;
     uc_args_int_uc_t vm_start;
     uc_args_tcg_enable_t tcg_enabled;
     uc_args_uc_long_t tcg_exec_init;
@@ -176,8 +173,10 @@ struct uc_struct {
     uc_mem_redirect_t mem_redirect;
     uc_args_uc_int_size_t option;
 
-    // list of cpu
-    void* cpu;
+    // TODO: remove current_cpu, as it's a flag for something else ("cpu running"?)
+    CPUState *cpu, *current_cpu;
+
+    uc_insn_hook_validate insn_hook_validate;
 
     MemoryRegion *system_memory;    // qemu/exec.c
     MemoryRegion io_mem_rom;    // qemu/exec.c
@@ -185,10 +184,8 @@ struct uc_struct {
     MemoryRegion io_mem_unassigned; // qemu/exec.c
     MemoryRegion io_mem_watch;  // qemu/exec.c
     RAMList ram_list;   // qemu/exec.c
-    CPUState *next_cpu; // qemu/cpus.c
     BounceBuffer bounce;    // qemu/cpu-exec.c
     volatile sig_atomic_t exit_request; // qemu/cpu-exec.c
-    spinlock_t x86_global_cpu_lock; // for X86 arch only
     bool global_dirty_log;  // qemu/memory.c
     /* This is a multi-level map on the virtual address space.
        The bottom level has pointers to PageDesc.  */
@@ -200,13 +197,14 @@ struct uc_struct {
     unsigned memory_region_transaction_depth;
     bool memory_region_update_pending;
     bool ioeventfd_update_pending;
-    QemuMutex flat_view_mutex;
     QTAILQ_HEAD(memory_listeners, MemoryListener) memory_listeners;
     QTAILQ_HEAD(, AddressSpace) address_spaces;
+    MachineState *machine_state;
     // qom/object.c
     GHashTable *type_table;
     Type type_interface;
     Object *root;
+    Object *owner;
     bool enumerating_types;
     // util/module.c
     ModuleTypeList init_type_list[MODULE_INIT_MAX];
@@ -215,7 +213,6 @@ struct uc_struct {
     int apic_no;
     bool mmio_registered;
     bool apic_report_tpr_access;
-    CPUState *current_cpu;
 
     // linked lists containing hooks per type
     struct list hook[UC_HOOK_MAX];
@@ -243,6 +240,7 @@ struct uc_struct {
     int thumb;  // thumb mode for ARM
     // full TCG cache leads to middle-block break in the last translation?
     bool block_full;
+    int size_arg;     // what tcg arg slot do we need to update with the size of the block?
     MemoryRegion **mapped_blocks;
     uint32_t mapped_block_count;
     uint32_t mapped_block_cache_index;
@@ -250,11 +248,17 @@ struct uc_struct {
     uint32_t target_page_size;
     uint32_t target_page_align;
     uint64_t next_pc;   // save next PC for some special cases
+    bool hook_insert;	// insert new hook at begin of the hook list (append by default)
 };
 
-#include "qemu_macro.h"
+// Metadata stub for the variable-size cpu context used with uc_context_*()
+struct uc_context {
+   size_t size;
+   char data[0];
+};
 
 // check if this address is mapped in (via uc_mem_map())
 MemoryRegion *memory_mapping(struct uc_struct* uc, uint64_t address);
 
 #endif
+/* vim: set ts=4 noet:  */

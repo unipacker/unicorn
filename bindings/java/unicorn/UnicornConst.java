@@ -6,6 +6,10 @@ public interface UnicornConst {
    public static final int UC_API_MAJOR = 1;
 
    public static final int UC_API_MINOR = 0;
+   public static final int UC_VERSION_MAJOR = 1;
+
+   public static final int UC_VERSION_MINOR = 0;
+   public static final int UC_VERSION_EXTRA = 2;
    public static final int UC_SECOND_SCALE = 1000000;
    public static final int UC_MILISECOND_SCALE = 1000;
    public static final int UC_ARCH_ARM = 1;
@@ -60,7 +64,7 @@ public interface UnicornConst {
    public static final int UC_ERR_FETCH_UNALIGNED = 18;
    public static final int UC_ERR_HOOK_EXIST = 19;
    public static final int UC_ERR_RESOURCE = 20;
-   public static final int UC_ERR_OPT_INVALID = 21;
+   public static final int UC_ERR_EXCEPTION = 21;  //Attention: ERR_OPT_INVALID would have the same
    public static final int UC_OPT_WINDOWS_TIB = 1;
    public static final int UC_MEM_READ = 16;
    public static final int UC_MEM_WRITE = 17;
@@ -71,6 +75,7 @@ public interface UnicornConst {
    public static final int UC_MEM_WRITE_PROT = 22;
    public static final int UC_MEM_READ_PROT = 23;
    public static final int UC_MEM_FETCH_PROT = 24;
+   public static final int UC_MEM_READ_AFTER = 25;
    public static final int UC_HOOK_INTR = 1;
    public static final int UC_HOOK_INSN = 2;
    public static final int UC_HOOK_CODE = 4;
@@ -84,6 +89,7 @@ public interface UnicornConst {
    public static final int UC_HOOK_MEM_READ = 1024;
    public static final int UC_HOOK_MEM_WRITE = 2048;
    public static final int UC_HOOK_MEM_FETCH = 4096;
+   public static final int UC_HOOK_MEM_READ_AFTER = 8192;
    public static final int UC_HOOK_MEM_UNMAPPED = 112;
    public static final int UC_HOOK_MEM_PROT = 896;
    public static final int UC_HOOK_MEM_READ_INVALID = 144;
@@ -93,6 +99,7 @@ public interface UnicornConst {
    public static final int UC_HOOK_MEM_VALID = 7168;
    public static final int UC_QUERY_MODE = 1;
    public static final int UC_QUERY_PAGE_SIZE = 2;
+   public static final int UC_QUERY_ARCH = 3;
 
    public static final int UC_PROT_NONE = 0;
    public static final int UC_PROT_READ = 1;
