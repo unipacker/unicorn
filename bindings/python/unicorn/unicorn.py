@@ -9,7 +9,7 @@ import os.path
 import sys
 import weakref
 
-from . import x86_const, arm64_const, unicorn_const as uc
+from . import x86_const, arm64_const, unicorn_const as uc, UC_OPT_WINDOWS_TIB, UC_ERR_OK
 
 if not hasattr(sys.modules[__name__], "__file__"):
     __file__ = inspect.getfile(inspect.currentframe())
@@ -139,7 +139,7 @@ _setup_prototype(_uc, "uc_free", ucerr, ctypes.c_void_p)
 _setup_prototype(_uc, "uc_context_save", ucerr, uc_engine, uc_context)
 _setup_prototype(_uc, "uc_context_restore", ucerr, uc_engine, uc_context)
 _setup_prototype(_uc, "uc_mem_regions", ucerr, uc_engine, ctypes.POINTER(ctypes.POINTER(_uc_mem_region)), ctypes.POINTER(ctypes.c_uint32))
-_setup_prototype(_uc, "uc_option", ucerr, uc_engine, c_int, c_void_p)
+_setup_prototype(_uc, "uc_option", ucerr, uc_engine, ctypes.c_int, ctypes.c_void_p)
 
 # uc_hook_add is special due to variable number of arguments
 _uc.uc_hook_add = _uc.uc_hook_add

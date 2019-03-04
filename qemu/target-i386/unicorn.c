@@ -1349,7 +1349,7 @@ static bool x86_stop_interrupt(int intno)
 
 static uc_err x86_option(struct uc_struct *uc, uc_opt_type type, size_t value)
 {
-    CPUState *mycpu = first_cpu;
+    CPUState *mycpu = uc->cpu;
 
     if (type != UC_OPT_WINDOWS_TIB)
         return UC_ERR_OPT_INVALID;
