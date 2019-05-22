@@ -258,12 +258,12 @@ def join_all(src, files):
 setup(
     provides=['unicorn'],
     packages=['unicorn'],
-    name='unicorn',
+    name='unicorn-unipacker',
     version=VERSION,
-    author='Nguyen Anh Quynh',
-    author_email='aquynh@gmail.com',
-    description='Unicorn CPU emulator engine',
-    url='http://www.unicorn-engine.org',
+    author='Un{i}packer Team',
+    author_email='masrepus97@gmail.com',
+    description='Un{i}packer fork of Unicorn CPU emulator engine',
+    url='https://github.com/unipacker/unicorn',
     classifiers=[
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 2',
