@@ -37,7 +37,8 @@ sdist3:
 	rm -rf src/ dist/
 	rm -rf prebuilt/win64/unicorn.dll
 	rm -rf prebuilt/win32/unicorn.dll
-	python3 setup.py sdist register upload
+	python3 setup.py sdist
+	python3 -m twine upload dist/*
 
 # build & upload PyPi package with precompiled core
 bdist:
@@ -51,7 +52,8 @@ bdist3:
 	rm -rf src/ dist/
 	rm -rf prebuilt/win64/unicorn.dll
 	rm -rf prebuilt/win32/unicorn.dll
-	python3 setup.py bdist_wheel register upload
+	python3 setup.py bdist_wheel
+	python3 -m twine upload dist/*
 
 # build & upload PyPi package with prebuilt core
 # NOTE: be sure to have precompiled core under prebuilt/win*/ beforehand
