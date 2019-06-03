@@ -1,76 +1,19 @@
-language: c
-sudo: false
-before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./install-cmocka-linux.sh; fi
-script:
-  - make && make -C bindings/go && make -C bindings/go test && make test
-compiler:
-  - clang
-  - gcc
-os:
-  - linux
-  - osx
+sudo: required
+language: python
+
 matrix:
   include:
-    - os: linux
-      compiler: gcc
-      env: CFLAGS="-m32" LDFLAGS="-m32" LDFLAGS_STATIC="-m32" UNICORN_QEMU_FLAGS="--cpu=i386"
-      script: make && make -C tests/unit test && make -C tests/regress test
-    - os: linux
-      dist: xenial
-      before_install:
-      compiler: gcc
-      addons:
-        apt:
-          packages:
-            - lib32ncurses5-dev
-            - lib32z1-dev
-            - libpthread-stubs0-dev
-            - lib32gcc-4.8-dev
-            - libc6-dev-i386
-            - gcc-multilib
-            - libcmocka-dev
-    - os: linux
-      dist: xenial
-      before_install:
-      compiler: clang
-      addons:
-        apt:
-          packages:
-            - lib32ncurses5-dev
-            - lib32z1-dev
-            - libpthread-stubs0-dev
-            - lib32gcc-4.8-dev
-            - libc6-dev-i386
-            - gcc-multilib
-            - libcmocka-dev
-    - os: linux
-      dist: xenial
-      before_install:
-      compiler: gcc
-      env: CFLAGS="-m32" LDFLAGS="-m32" LDFLAGS_STATIC="-m32" UNICORN_QEMU_FLAGS="--cpu=i386"
-      script: make && make -C tests/unit test && make -C tests/regress test
-      addons:
-        apt:
-          packages:
-            - lib32ncurses5-dev
-            - lib32z1-dev
-            - libpthread-stubs0-dev
-            - lib32gcc-4.8-dev
-            - libc6-dev-i386
-            - gcc-multilib
-            - libcmocka-dev:i386
-    - if: branch = master
-      os: osx
-      script: brew install --HEAD unicorn && brew test unicorn
-      compiler: gcc
-    - if: branch = master
-      os: osx
-      script: brew install --HEAD unicorn && brew test unicorn
-      compiler: clang
-  allow_failures:
-    - os: osx
-      script: brew install --HEAD unicorn && brew test unicorn
+  - name: "Python 3.7.1 on Xenial Linux"
+    python: 3.7           # this works for Linux but is ignored on macOS or Windows
+    dist: xenial          # required for Python >= 3.7
+    cache: pip
+    env: DISTS="sdist bdist_wheel" UNICORN_QEMU_FLAGS="--python=/usr/bin/python2"
+  - name: Python 3.7.2 on macOS
+    os: osx
+    osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
+    language: shell       # 'language: python' is an error on Travis CI macOS
+    env: DISTS="bdist_wheel"
+
 addons:
   apt:
     packages:
@@ -81,5 +24,22 @@ addons:
       - lib32gcc-4.8-dev
       - libc6-dev-i386
       - gcc-multilib
-  homebrew:
-    brewfile: true
+      - python2
+
+install:
+        - pip3 install --upgrade pip setuptools pytest wheel twine
+
+script:
+- ./make.sh
+
+before_deploy: cd bindings/python
+
+deploy:
+      provider: pypi
+      user: Masrepus
+      password:
+        secure: IVmi4+kpr8cZhuEtUFQp0zN4GEW7NTV7oXeoVgDnKq2oqWMWxo6WboFlqMsT+dgo5BBc1FmBR3HYU6vwkF+Q9upN/aHiP3rQLENDUwdFy3+1sDZuWze1nfc+WLLBL7mGXmImltEGW3+ObSBSiec7CpuN01OPYlZP4IHDadkY2shB/oHwEm66nwvcfuoBh4kr169mDETw/kEkA4eZo+PjZ82dSgq1Xe4AKPtvayBxlDP++irKziXnSTZ9UhNaFfu3JoBo4JkGbqRpZtdzjcTe9oF1ug2p2Q3kw1VyddMl7OIELKUMjOdAPY9Txi8KZRqtM9ZNxbKDc4ylS+4HmD9IaeM+eYFLHnfZ/71QxEppyRx3efyXfs97PM2+InSqg+ukUrghNTNBtdQueIcqMDTtrJPgQUFz4roZe61O5iuJZ30QKXU9eUwhEBjiURabtFehxrzHaI5Znw+D7/b0edjXg/EL9sDr8r7AcKRP2DCH0sL7Q+G1OMmNXwMZ2Um96/o7W5SXwUkTEu6oXSMJlHATl1chdQNEHKHtVPXQ0QKfN1rjSko56Ny5hSzVFW4GBPviR84ov/Xp23GgtqYHrHNggymlf0jzmPjgDbIf8Rdf0rWJiXXVGu2U2j98L8BBhjLJJm5c5GxMoStqwMzUl/4JgL+Anj7qHT0+INAajt7hkoI=
+      distributions: sdist bdist_wheel
+      on:
+        tags: true
+        all_branches: true
