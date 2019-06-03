@@ -8,7 +8,7 @@ matrix:
     dist: xenial          # required for Python >= 3.7
     cache: pip
     env: DISTS="sdist bdist_wheel"
-    before_install: sudo apt install python3
+    before_install: sudo apt install python3 python3-pip
   - name: Python 3.7.2 on macOS
     os: osx
     osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
