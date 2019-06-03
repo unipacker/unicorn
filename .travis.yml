@@ -4,10 +4,11 @@ language: python
 matrix:
   include:
   - name: "Python 3.7.1 on Xenial Linux"
-    python: 3.7           # this works for Linux but is ignored on macOS or Windows
+    python: 2.7
     dist: xenial          # required for Python >= 3.7
     cache: pip
     env: DISTS="sdist bdist_wheel"
+    before_install: sudo apt install python3
   - name: Python 3.7.2 on macOS
     os: osx
     osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
