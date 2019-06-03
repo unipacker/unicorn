@@ -1,13 +1,15 @@
-Unicorn Engine
-==============
-
-[![Join the chat at https://gitter.im/unicorn-engine/chat](https://badges.gitter.im/unicorn-engine/unicorn.svg)](https://gitter.im/unicorn-engine/chat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
-[![Build Status](https://travis-ci.org/unicorn-engine/unicorn.svg?branch=master)](https://travis-ci.org/unicorn-engine/unicorn)
-[![Build status](https://ci.appveyor.com/api/projects/status/kojr7bald748ba2x/branch/master?svg=true)](https://ci.appveyor.com/project/aquynh/unicorn/branch/master)
+Unicorn Engine: Un{i}packer Edition
+===================================
+[![PyPI: unicorn-unipacker](https://badge.fury.io/py/unicorn-unipacker.svg)](https://pypi.org/project/unicorn-unipacker/)
 
 Unicorn is a lightweight, multi-platform, multi-architecture CPU emulator framework
 based on [QEMU](http://qemu.org).
+
+This fork provides a modified version of Unicorn
+that handles access to the Windows [TIB](https://en.wikipedia.org/wiki/Win32_Thread_Information_Block).
+Some binary packers want to read things from this block, so Un{i}packer needs to provide it.
+Unicorn engine had this feature once, but it's not available in the current version. This is
+why we created this fork that restores TIB functionality.
 
 Unicorn offers some unparalleled features:
 
