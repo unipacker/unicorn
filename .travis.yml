@@ -1,5 +1,8 @@
 sudo: required
 language: python
+env:
+  - TWINE_USERNAME=Masrepus
+  - secure: GH5caMSGX5vrXn2aIP2thNELEQLz2ngArN4OqaGPuDCLx67xcrOKHy9XV75MUosyIcgCDMndBo8DVhVPBfnD2d9ZjmRSMv5yw9HdDdbpN7wVThs0rZynpjf5TlbEKTeQffVlOmbP1U4HWQIqkTn+uLpgM3QD4fWAapdlq+ag/zlL7650AeErEqUGqzKRJ6EqmCzWYLZhqDLGw599Z7H8db3cO0u1WPouOxwq+cUfo1fkazc7eeWpMNRsS7L/BVitacVCClnJqpxTMFbwjpsaqJhd6RKX8GFEedcWRyqL7Rkw67nbBJ+MtdiqRhG18aSzaMSI+Itn+uyMIUsa0HWVQjM6v3RrwON4+ggClz8iHsY0uAov6FKjmMT5HNuhat4Kdi8riRfkaFdpyC7aoM1i2x0CU1h1dYD9qgNXaK7hEcJdn+i6jF6RU5vtj+2DibKKCNHewx5RofbHvj2L5bs9nmACMfvjLBVY/NUZsjcSnm1OPyBZXgj7WWnnGAcYvj3gBomhbi5FubfaSuhmVfRqpJaILuK5M4YNcer1jJsXe3j2z9r5fx0JYC1lDuIO4skxvquLcEf5jYoHTxY91xSGfzxk0m6KbRalVa4b82UEbK17ThV1MekMD7buz7IQHRutXc7FUejeZQyqYQguHfwC1o0uBtmXqMOHFvS4P41OOD8=
 
 matrix:
   include:
@@ -7,15 +10,27 @@ matrix:
     python: 2.7
     dist: xenial          # required for Python >= 3.7
     cache: pip
-    env: DISTS="sdist bdist_wheel"
     before_install:
       - sudo apt update
       - sudo apt install python3 python3-pip
+    deploy:
+      provider: script
+      script: make sdist bdist3
+      skip_cleanup: true
+      on:
+        tags: true
+        all_branches: true
   - name: Python 3.7.2 on macOS
     os: osx
     osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
     language: shell       # 'language: python' is an error on Travis CI macOS
-    env: DISTS="bdist_wheel"
+    deploy:
+      provider: script
+      script: make bdist3
+      skip_cleanup: true
+      on:
+        tags: true
+        all_branches: true
 
 install:
         - pip3 install --upgrade pip setuptools pytest wheel twine
@@ -24,14 +39,3 @@ script:
 - ./make.sh
 
 before_deploy: cd bindings/python
-
-deploy:
-      provider: pypi
-      user: Masrepus
-      password:
-        secure: IVmi4+kpr8cZhuEtUFQp0zN4GEW7NTV7oXeoVgDnKq2oqWMWxo6WboFlqMsT+dgo5BBc1FmBR3HYU6vwkF+Q9upN/aHiP3rQLENDUwdFy3+1sDZuWze1nfc+WLLBL7mGXmImltEGW3+ObSBSiec7CpuN01OPYlZP4IHDadkY2shB/oHwEm66nwvcfuoBh4kr169mDETw/kEkA4eZo+PjZ82dSgq1Xe4AKPtvayBxlDP++irKziXnSTZ9UhNaFfu3JoBo4JkGbqRpZtdzjcTe9oF1ug2p2Q3kw1VyddMl7OIELKUMjOdAPY9Txi8KZRqtM9ZNxbKDc4ylS+4HmD9IaeM+eYFLHnfZ/71QxEppyRx3efyXfs97PM2+InSqg+ukUrghNTNBtdQueIcqMDTtrJPgQUFz4roZe61O5iuJZ30QKXU9eUwhEBjiURabtFehxrzHaI5Znw+D7/b0edjXg/EL9sDr8r7AcKRP2DCH0sL7Q+G1OMmNXwMZ2Um96/o7W5SXwUkTEu6oXSMJlHATl1chdQNEHKHtVPXQ0QKfN1rjSko56Ny5hSzVFW4GBPviR84ov/Xp23GgtqYHrHNggymlf0jzmPjgDbIf8Rdf0rWJiXXVGu2U2j98L8BBhjLJJm5c5GxMoStqwMzUl/4JgL+Anj7qHT0+INAajt7hkoI=
-      distributions: $DISTS
-      skip_cleanup: true
-      on:
-        tags: true
-        all_branches: true
