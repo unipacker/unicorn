@@ -14,18 +14,6 @@ matrix:
     language: shell       # 'language: python' is an error on Travis CI macOS
     env: DISTS="bdist_wheel"
 
-addons:
-  apt:
-    packages:
-      - lib32ncurses5-dev
-      - lib32z1-dev
-      - lib32bz2-dev
-      - libpthread-stubs0-dev
-      - lib32gcc-4.8-dev
-      - libc6-dev-i386
-      - gcc-multilib
-      - python2
-
 install:
         - pip3 install --upgrade pip setuptools pytest wheel twine
 
