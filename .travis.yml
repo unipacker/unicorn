@@ -16,7 +16,7 @@ matrix:
       - sudo apt install python3 python3-pip
     deploy:
       provider: script
-      script: make sdist bdist3
+      script: make sdist3 bdist3
       skip_cleanup: true
       on:
         tags: true
