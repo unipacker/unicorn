@@ -7,36 +7,36 @@ env:
 
 matrix:
   include:
-  - name: "Python 3.7.1 on Xenial Linux"
-    python: 2.7
-    dist: xenial          # required for Python >= 3.7
-    cache: pip
-    before_install:
-      - sudo apt update
-      - sudo apt install python3 python3-pip
-    deploy:
-      provider: script
-      script: make sdist3 bdist3
-      skip_cleanup: true
-      on:
-        tags: true
-        all_branches: true
-  - name: Python 3.7.2 on macOS
-    os: osx
-    osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
-    language: shell       # 'language: python' is an error on Travis CI macOS
-    deploy:
-      provider: script
-      script: make bdist3
-      skip_cleanup: true
-      on:
-        tags: true
-        all_branches: true
+#  - name: "Python 3.7.1 on Xenial Linux"
+#    python: 2.7
+#    dist: xenial          # required for Python >= 3.7
+#    cache: pip
+#    before_install:
+#      - sudo apt update
+#      - sudo apt install python3 python3-pip
+#    env: DISTS="sdist3 bdist3"
+#  - name: Python 3.7.2 on macOS
+#    os: osx
+#    osx_image: xcode10.2  # Python 3.7.2 running on macOS 10.14.3
+#    language: shell       # 'language: python' is an error on Travis CI macOS
+#    env: DISTS="bdist3"
+  - name: Windows
+    os: windows           # Windows 10.0.17134 N/A Build 17134
+    language: shell       # 'language: python' is an error on Travis CI Windows
+    before_install: choco install python2 python3 make gcc-core
+    env: PATH=/c/Python27/:/c/Python27/Scripts:/c/Python37:/c/Python37/Scripts:$PATH MAKE_OPTS="cross-win64" DISTS="bdist3"
 
 install:
         - pip3 install --upgrade pip setuptools pytest wheel twine
 
 script:
-- ./make.sh
+- ./make.sh $MAKE_OPTS
 
 before_deploy: cd bindings/python
+deploy:
+      provider: script
+      script: make $DISTS
+      skip_cleanup: true
+      on:
+        #tags: true
+        all_branches: true
