@@ -45,7 +45,8 @@ bdist:
 	rm -rf src/ dist/
 	rm -rf prebuilt/win64/unicorn.dll
 	rm -rf prebuilt/win32/unicorn.dll
-	python setup.py bdist_wheel register upload
+	python setup.py bdist_wheel
+	python -m twine upload dist/*
 
 # build & upload PyPi package with precompiled core
 bdist3:
