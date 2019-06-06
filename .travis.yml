@@ -23,7 +23,7 @@ matrix:
   - name: Windows
     os: windows           # Windows 10.0.17134 N/A Build 17134
     language: shell       # 'language: python' is an error on Travis CI Windows
-    before_install: choco install python2 python3 make gcc-core
+    before_install: choco install python2 python3 make
     env: PATH=/c/Python27/:/c/Python27/Scripts:/c/Python37:/c/Python37/Scripts:$PATH MAKE_OPTS="cross-win64" DISTS="bdist3"
 
 install:
