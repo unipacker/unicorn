@@ -27,7 +27,7 @@ matrix:
     env: PATH=/c/Python27/:/c/Python27/Scripts:/c/Python37:/c/Python37/Scripts:$PATH MAKE_OPTS="cross-win64" DISTS="bdist3"
 
 install:
-        - pip3 install --upgrade pip setuptools pytest wheel twine
+        - pip3 install --upgrade --user pip setuptools pytest wheel twine
 
 script:
 - ./make.sh $MAKE_OPTS
