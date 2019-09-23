@@ -17,11 +17,8 @@ OPTIONS:
     macos-universal-no      Build non-universal binaries that includes only 64-bit code on macOS
     cross-win32             Cross-compile Windows 32-bit binary with MinGW
     cross-win64             Cross-compile Windows 64-bit binary with MinGW
-    cross-android           Cross-compile for Android
-    ios                     Cross-compile for all iDevices (armv7 + armv7s + arm64)
-    ios_armv7               Cross-compile for ArmV7 (iPod 4, iPad 1/2/3, iPhone4, iPhone4S)
-    ios_armv7s              Cross-compile for ArmV7s (iPad 4, iPhone 5C, iPad mini)
-    ios_arm64               Cross-compile for Arm64 (iPhone 5S, iPad mini Retina, iPad Air)
+    cross-android_arm       Cross-compile for Android Arm
+    cross-android_arm64     Cross-compile for Android Arm64
     linux32                 Cross-compile Unicorn on 64-bit Linux to target 32-bit binary
     msvc_update_genfiles    Generate files for MSVC projects
 EOF
@@ -34,25 +31,6 @@ MAKE_JOBS=$((MAKE_JOBS+0))
 # build for ASAN
 asan() {
   env UNICORN_DEBUG=yes UNICORN_ASAN=yes "${MAKE}" V=1
-}
-
-# build iOS lib for all iDevices, or only specific device
-build_iOS() {
-  IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-  IOS_CC=$(xcrun --sdk iphoneos -f clang)
-  IOS_CFLAGS="-Os -Wimplicit -isysroot $IOS_SDK"
-  IOS_LDFLAGS="-isysroot $IOS_SDK"
-  if [ -z "$1" ]; then
-    # build for all iDevices
-    IOS_ARCHS="armv7 armv7s arm64"
-  else
-    IOS_ARCHS="$1"
-  fi
-  CC="$IOS_CC" \
-  CFLAGS="$IOS_CFLAGS" \
-  LDFLAGS="$IOS_LDFLAGS" \
-  LIBARCHS="$IOS_ARCHS" \
-    ${MAKE}
 }
 
 build_cross() {
@@ -150,11 +128,8 @@ case "$1" in
   "macos-universal-no" ) MACOS_UNIVERSAL=no ${MAKE};;
   "cross-win32" ) build_cross i686-w64-mingw32;;
   "cross-win64" ) build_cross x86_64-w64-mingw32;;
-  "cross-android" ) CROSS=arm-linux-androideabi ${MAKE};;
-  "ios" ) build_iOS;;
-  "ios_armv7" ) build_iOS armv7;;
-  "ios_armv7s" ) build_iOS armv7s;;
-  "ios_arm64" ) build_iOS arm64;;
+  "cross-android_arm" ) CROSS=arm-linux-androideabi ${MAKE};;
+  "cross-android_arm64" ) CROSS=aarch64-linux-android ${MAKE};;
   "linux32" ) build_linux32;;
   "msvc_update_genfiles" ) msvc_update_genfiles;;
   * )

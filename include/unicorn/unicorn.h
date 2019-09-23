@@ -180,6 +180,15 @@ typedef void (*uc_cb_hookcode_t)(uc_engine *uc, uint64_t address, uint32_t size,
 typedef void (*uc_cb_hookintr_t)(uc_engine *uc, uint32_t intno, void *user_data);
 
 /*
+  Callback function for tracing invalid instructions
+
+  @user_data: user data passed to tracing APIs.
+
+  @return: return true to continue, or false to stop program (due to invalid instruction).
+*/
+typedef bool (*uc_cb_hookinsn_invalid_t)(uc_engine *uc, void *user_data);
+
+/*
   Callback function for tracing IN instruction of X86
 
   @port: port number
@@ -242,6 +251,8 @@ typedef enum uc_hook_type {
     // Hook memory read events, but only successful access.
     // The callback will be triggered after successful read.
     UC_HOOK_MEM_READ_AFTER = 1 << 13,
+    // Hook invalid instructions exceptions.
+    UC_HOOK_INSN_INVALID = 1 << 14,
 } uc_hook_type;
 
 // Hook type for all events of unmapped memory access
@@ -742,6 +753,18 @@ uc_err uc_context_restore(uc_engine *uc, uc_context *context);
 UNICORN_EXPORT
 uc_err uc_option(uc_engine *uc, uc_opt_type type, size_t value);
 
+
+
+/*
+  Return the size needed to store the cpu context. Can be used to allocate a buffer
+  to contain the cpu context and directly call uc_context_save.
+
+  @uc: handle returned by uc_open()
+
+  @return the size for needed to store the cpu context as as size_t.
+*/
+UNICORN_EXPORT
+size_t uc_context_size(uc_engine *uc);
 
 #ifdef __cplusplus
 }
