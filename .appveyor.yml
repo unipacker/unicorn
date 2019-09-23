@@ -38,7 +38,7 @@ install:
 build_script:
     - if defined BASH (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make")
     - if "%MSYSTEM%" == "MINGW64" (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make -C bindings/go")
-    - if defined MSYSTEM (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER})/bindings/python && make bdist3")
+    - if "%APPVEYOR_REPO_TAG%" == "true" (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER})/bindings/python && make bdist3")
     - if "%CC%" == "msvc" (msbuild %APPVEYOR_BUILD_FOLDER%/msvc/unicorn.sln)
     # make test
     #- 'cd %APPVEYOR_BUILD_FOLDER% && cd bindings\dotnet && msbuild UnicornDotNet.sln'
