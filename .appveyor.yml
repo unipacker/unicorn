@@ -4,7 +4,7 @@ environment:
         secure: Jl9Shd9a+EH1XN7r152kyA==
     CYG_MIRROR: http://cygwin.mirror.constant.com
     CYG_PACKAGES: make,gcc-core,clang,pkg-config,libpcre-devel,cmake,python27-setuptools,ruby,mingw64-i686-gcc-core,mingw64-x86_64-gcc-core
-    MSYS_PACKAGES: mingw-w64-x86_64-cmocka mingw-w64-i686-cmocka mingw-w64-x86_64-python3-setuptools mingw-w64-i686-python3-setuptools mingw-w64-x86_64-python3-wheel mingw-w64-i686-python3-wheel mingw-w64-i686-ntldd mingw-w64-x86_64-ntldd
+    MSYS_PACKAGES: mingw-w64-x86_64-cmocka mingw-w64-i686-cmocka mingw-w64-x86_64-python3-setuptools mingw-w64-i686-python3-setuptools mingw-w64-x86_64-python3-wheel mingw-w64-i686-python3-wheel mingw-w64-x86_64-python3-pip mingw-w64-i686-python3-pip mingw-w64-i686-ntldd mingw-w64-x86_64-ntldd
     matrix:
         - MSYSTEM: MINGW64
           BASH: C:\msys64\usr\bin\bash
@@ -33,6 +33,7 @@ install:
     - if defined CYG_ROOT (%CYG_SETUP% --quiet-mode --no-shortcuts --only-site --root "%CYG_ROOT%" --site "%CYG_MIRROR%" --local-package-dir "%CYG_CACHE%" --packages "%CYG_PACKAGES%" --upgrade-also)
     - if defined MSYSTEM (%BASH% -lc "pacman -Suuy --noconfirm ${MSYS_PACKAGES}")
     - if defined MSYSTEM (%BASH% -lc "pacman -Suuy --noconfirm ${MSYS_PACKAGES} && pacman -Sc --noconfirm")
+    - if defined MSYSTEM (%BASH% -lc "pip3 install twine")
 build_script:
     - if defined BASH (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make")
     - if "%MSYSTEM%" == "MINGW64" (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make -C bindings/go")
