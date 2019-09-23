@@ -1,5 +1,7 @@
 # Appveyor configuration file for CI build of Unicorn Engine on Windows
 environment:
+    PYPI_PASSWORD:
+        secure: Jl9Shd9a+EH1XN7r152kyA==
     CYG_MIRROR: http://cygwin.mirror.constant.com
     CYG_PACKAGES: make,gcc-core,clang,pkg-config,libpcre-devel,cmake,python27-setuptools,ruby,mingw64-i686-gcc-core,mingw64-x86_64-gcc-core
     MSYS_PACKAGES: mingw-w64-x86_64-cmocka mingw-w64-i686-cmocka mingw-w64-x86_64-python3-setuptools mingw-w64-i686-python3-setuptools mingw-w64-i686-ntldd mingw-w64-x86_64-ntldd
@@ -12,17 +14,6 @@ environment:
           BASH: C:\msys64\usr\bin\bash
           MSYS_CACHE: C:\msys64\var\cache\pacman\pkg
           CC: i686-w64-mingw32-gcc
-        - CYG_ROOT: C:\cygwin64
-          CYG_CACHE: C:\cygwin64\var\cache\setup
-          CYG_SETUP: setup-x86_64.exe
-          BASH: C:\cygwin64\bin\bash
-          CC: gcc
-        - CYG_ROOT: C:\cygwin
-          CYG_CACHE: C:\cygwin\var\cache\setup
-          CYG_SETUP: setup-x86.exe
-          BASH: C:\cygwin\bin\bash
-          CC: gcc
-        - CC: msvc
 
 # Cache Cygwin/MSYS files to speed up build
 cache:
@@ -44,7 +35,7 @@ install:
     - if defined MSYSTEM (%BASH% -lc "pacman -Suuy --noconfirm ${MSYS_PACKAGES} && pacman -Sc --noconfirm")
 build_script:
     - if defined BASH (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make")
-    - if "%MSYSTEM%" == "MINGW64" (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make -C bindings/go")
+    - if "%MSYSTEM%" == "MINGW64" (%BASH% -lc "cd $(cygpath ${APPVEYOR_BUILD_FOLDER}) && make -C bindings/go && make bdist3")
     - if "%CC%" == "msvc" (msbuild %APPVEYOR_BUILD_FOLDER%/msvc/unicorn.sln)
     # make test
     #- 'cd %APPVEYOR_BUILD_FOLDER% && cd bindings\dotnet && msbuild UnicornDotNet.sln'
@@ -63,3 +54,18 @@ after_test:
   - if defined CYG_ROOT (appveyor PushArtifact %APPVEYOR_BUILD_FOLDER%\cygunicorn.dll)
   - if defined MSYSTEM (appveyor PushArtifact %APPVEYOR_BUILD_FOLDER%\unicorn.dll)
   - if "%CC%" == "msvc" (appveyor PushArtifact %APPVEYOR_BUILD_FOLDER%\msvc\Win32\Debug\unicorn.dll)
+
+deploy_script:
+  - echo "Starting Artifact Deployment"
+  # populate pypirc file for twine
+  - echo [distutils]                                  > %USERPROFILE%\\.pypirc
+  - echo index-servers =                             >> %USERPROFILE%\\.pypirc
+  - echo     pypi                                    >> %USERPROFILE%\\.pypirc
+  - echo [pypi]                                      >> %USERPROFILE%\\.pypirc
+  - echo username=Masrepus                           >> %USERPROFILE%\\.pypirc
+  - echo password=%PYPI_PASSWORD%                    >> %USERPROFILE%\\.pypirc
+  # upload to pypi for windows
+  - set PATH=%BK_PATH%
+  - set HOME=%USERPROFILE%
+  - ps: If ($env:APPVEYOR_REPO_TAG -eq "true") { Invoke-Expression "twine upload --skip-existing dist/*.whl" 2>$null } Else { write-output "Not on a tag, won't deploy to pypi"}
+  - echo "Finished Artifact Deployment"
