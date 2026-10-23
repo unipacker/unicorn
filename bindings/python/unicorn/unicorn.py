@@ -2,8 +2,11 @@
 
 import ctypes
 import ctypes.util
-import distutils.sysconfig
-import pkg_resources
+import sysconfig
+try:
+    import pkg_resources
+except ImportError:
+    pkg_resources = None
 import inspect
 import os.path
 import sys
@@ -79,10 +82,10 @@ _uc = None
 # - last-gasp attempt at some hardcoded paths on darwin and linux
 
 _path_list = [os.getenv('LIBUNICORN_PATH', None),
-              pkg_resources.resource_filename(__name__, 'lib'),
+              pkg_resources.resource_filename(__name__, 'lib') if pkg_resources else None,
               os.path.join(os.path.split(__file__)[0], 'lib'),
               '',
-              distutils.sysconfig.get_python_lib(),
+              sysconfig.get_path('purelib'),
               "/usr/local/lib/" if sys.platform == 'darwin' else '/usr/lib64',
               os.getenv('PATH', '')]
 
